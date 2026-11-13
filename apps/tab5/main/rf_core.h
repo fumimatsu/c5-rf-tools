@@ -47,6 +47,14 @@ inline void plan_frequencies(const ChannelPlan &p, uint16_t *out) {
 constexpr int16_t missing = INT16_MIN;
 constexpr int gain = 30, offset = 10, bandwidth = 1, capture_samples = 256;
 constexpr int64_t bin_us = 100000, fresh_us = 500000;
+enum Transport : uint8_t { CrcError = 1, SequenceGap = 2, ChipDrop = 4, Malformed = 8,
+                           StreamReset = 16, ClockReset = 32, Duplicate = 64 };
+enum SampleIssue : uint8_t { CaptureFailed = 1, GainMoved = 2, Clipped = 4, Fallback = 8, Missing = 16 };
+inline uint8_t sample_issues(const c5::Reading &r) {
+    return uint8_t((r.flags & 15) | (r.gain != gain ? GainMoved : 0) |
+                   (r.clips ? Clipped : 0) |
+                   (r.raw == missing || r.filtered == missing ? Missing : 0));
+}
 enum class Mode : uint8_t { Offline, Restore, Monitor, Search, BackgroundMonitor, BackgroundSweep, Fault };
 inline const char *mode_name(Mode m) {
     switch (m) {
@@ -231,6 +239,7 @@ inline bool compatible(const Background &b, const char *serial, const char *firm
 struct Channel {
     int16_t raw = missing, filtered = missing, peak = missing;
     uint8_t flags = 0, clips = 0, gain = 0;
+    uint8_t last_issues = 0, last_bad_flags = 0, last_bad_clips = 0, last_bad_gain = 0;
     bool valid = false, planned = true, alert = false;
     uint8_t votes = 0;
     uint32_t source_us = 0;
@@ -253,6 +262,10 @@ struct Data {
     char serial[40]{}, firmware[32]{}, notice[192]{}, error[120]{};
     uint32_t bytes = 0, records = 0, matched = 0, crc = 0, gaps = 0, drops = 0, malformed = 0, resync = 0,
              bad_samples = 0, clock_resets = 0;
+    uint32_t drop_increase = 0, duplicates = 0, transport_faults = 0;
+    uint32_t clip_samples = 0, gain_samples = 0, fail_samples = 0, fallback_samples = 0, missing_samples = 0;
+    uint8_t transport_flags = 0;
+    int64_t transport_us = 0;
     int64_t last_record_us = 0, mode_started_us = 0;
     signal_health::Reference normal_refs[PRESETS]{};
     bool normal_active[N]{};
@@ -321,6 +334,8 @@ inline signal_health::Result visible_normal(const Data &d, unsigned slot, int64_
         return unknown(Reason::PlannedOff);
     if (duplicate_channel(d, slot))
         return unknown(Reason::Duplicate);
+    if (d.transport_us && now - d.transport_us < 1000000)
+        return unknown(Reason::Transport);
     if (!c.valid || (c.bad_us && now - c.bad_us < 1000000))
         return unknown(Reason::Invalid);
     const auto &ref = normal_reference(d, slot);
@@ -350,6 +365,35 @@ struct Model {
             normal_monitor[i].reset();
             data.normal_result[i] = signal_health::unknown(signal_health::Reason::Warming);
         }
+    }
+    void transport_fault(uint8_t reason, int64_t now) {
+        // The missing interval may straddle the last open bin and the current
+        // bin. Abort capture before advancing either one to a completed state.
+        // Saved references/backgrounds remain unchanged; only this capture/window is invalid.
+        if (data.normal_capture.phase == signal_health::Phase::Off ||
+            data.normal_capture.phase == signal_health::Phase::Normal)
+            data.normal_capture.fail(signal_health::Error::Transport);
+        if (data.mode == Mode::Monitor || data.mode == Mode::BackgroundMonitor) {
+            for (auto &b : bucket) ++b.bad;
+            expire_bin(now / bin_us);
+            for (auto &b : bucket) ++b.bad;
+        }
+        if (data.mode == Mode::Search || data.mode == Mode::BackgroundSweep)
+            for (auto &b : sweep_bucket) ++b.bad;
+        if (!data.transport_us || now - data.transport_us >= 1000000) data.transport_flags = 0;
+        data.transport_flags |= reason;
+        data.transport_us = now;
+        ++data.transport_faults;
+        bg_failed = true;
+        reset_normal();
+    }
+    void count_sample(const c5::Reading &r) {
+        const auto issues = sample_issues(r);
+        data.clip_samples += bool(issues & Clipped);
+        data.gain_samples += bool(issues & GainMoved);
+        data.fail_samples += bool(issues & CaptureFailed);
+        data.fallback_samples += bool(issues & Fallback);
+        data.missing_samples += bool(issues & Missing);
     }
     void finish_normal_bin(const HistoryBin &bin, bool consecutive) {
         auto &cap = data.normal_capture;
@@ -525,6 +569,7 @@ struct Model {
             return;
         if (data.mode == Mode::Search || data.mode == Mode::BackgroundSweep) {
             for (unsigned i = 0; i < r.count; i++) {
+                count_sample(r.channels[i]);
                 sweep_bucket[i].add(r.channels[i]);
                 if (!valid(r.channels[i]))
                     ++data.bad_samples;
@@ -533,17 +578,21 @@ struct Model {
         }
         if (data.mode != Mode::Monitor && data.mode != Mode::BackgroundMonitor)
             return;
+        bool clock_reset = false;
+        for (unsigned i = 0; i < N; i++) {
+            const auto &c = data.channel[i];
+            if (c.host_us && uint32_t(r.channels[i].source_us - c.source_us) > 0x80000000u)
+                clock_reset = true;
+        }
+        if (clock_reset) {
+            ++data.clock_resets;
+            invalidate_background("受信機の時刻が変化。背景を再確認してください");
+            transport_fault(ClockReset, now);
+        }
         expire_bin(now / bin_us);
         for (unsigned i = 0; i < N; i++) {
             const auto &x = r.channels[i];
             auto &c = data.channel[i];
-            if (c.host_us) {
-                const uint32_t advance = x.source_us - c.source_us;
-                if (advance > 0x80000000u) {
-                    ++data.clock_resets;
-                    invalidate_background("受信機の時刻が変化。背景を再確認してください");
-                }
-            }
             c.source_us = x.source_us;
             c.host_us = now;
             c.raw = x.raw;
@@ -552,8 +601,13 @@ struct Model {
             c.clips = x.clips;
             c.gain = x.gain;
             c.valid = valid(x);
+            count_sample(x);
             if (!c.valid) {
                 c.bad_us = now;
+                c.last_issues = sample_issues(x);
+                c.last_bad_flags = x.flags;
+                c.last_bad_clips = x.clips;
+                c.last_bad_gain = x.gain;
                 normal_monitor[i].reset();
                 data.normal_result[i] = signal_health::unknown(signal_health::Reason::Invalid);
                 ++data.bad_samples;

@@ -249,6 +249,33 @@ void rf_self_test() {
         }
     auto result = rf::visible_normal(d, 3, 304 * rf::bin_us + 3000);
     assert(result.level == signal_health::Grade::Green && result.stability == signal_health::Grade::Green);
+    const auto reference_checksum = d.normal_refs[7].checksum;
+    model->transport_fault(rf::CrcError, 304 * rf::bin_us + 4000);
+    result = rf::visible_normal(d, 3, 304 * rf::bin_us + 4000);
+    assert(result.level == signal_health::Grade::Gray && result.level_reason == signal_health::Reason::Transport);
+    // A later valid sample in this same bin cannot make the incomplete bin clean.
+    model->ingest(record, 304 * rf::bin_us + 5000);
+    model->expire_bin(305);
+    assert(d.history[304 % rf::HISTORY].valid_mask == 0 && d.history[304 % rf::HISTORY].bad_mask == 15);
+    assert(d.normal_active[3] && d.normal_refs[7].checksum == reference_checksum);
+    for (unsigned bin = 305; bin < 408; bin++)
+        for (unsigned sample = 0; sample < 4; sample++) {
+            for (unsigned i = 0; i < rf::N; i++)
+                record.channels[i] = {bin * 100000 + sample * 1000, 2000, 2000, selected[i], 0, 30, 0};
+            model->ingest(record, bin * rf::bin_us + sample * 1000);
+        }
+    result = rf::visible_normal(d, 3, 407 * rf::bin_us + 3000);
+    assert(result.level == signal_health::Grade::Green && result.stability == signal_health::Grade::Green);
+    d.normal_capture.phase = signal_health::Phase::Off;
+    model->transport_fault(rf::SequenceGap, 407 * rf::bin_us + 4000);
+    assert(d.normal_capture.phase == signal_health::Phase::Failed &&
+           d.normal_capture.error == signal_health::Error::Transport);
+    d.normal_capture.phase = signal_health::Phase::Normal;
+    model->transport_fault(rf::ChipDrop, 407 * rf::bin_us + 5000);
+    assert(d.normal_capture.phase == signal_health::Phase::Failed &&
+           d.normal_capture.error == signal_health::Error::Transport);
+    assert(d.normal_refs[7].checksum == reference_checksum && signal_health::valid(d.normal_refs[7]));
+    d.normal_capture.phase = signal_health::Phase::Idle;
     d.background_busy = true;
     assert(rf::visible_normal(d, 3, 304 * rf::bin_us + 3000).level_reason ==
            signal_health::Reason::Recording);
@@ -261,5 +288,38 @@ void rf_self_test() {
     d.channel[3].planned = true;
     d.channel[3].valid = false;
     assert(rf::visible_normal(d, 3, 304 * rf::bin_us + 3000).level == signal_health::Grade::Gray);
+    // A C5 clock rollback must remain an incomplete bin even if invalidating
+    // the adopted background clears the presentation/history buffers.
+    d.background_active = true;
+    d.normal_capture.phase = signal_health::Phase::Off;
+    for (auto &x : record.channels) x.source_us = 100;
+    model->ingest(record, 408 * rf::bin_us + 1000);
+    model->expire_bin(409);
+    assert(!d.background_active && d.history[408 % rf::HISTORY].valid_mask == 0);
+    assert(d.history[408 % rf::HISTORY].bad_mask == 15);
+    assert(d.normal_capture.error == signal_health::Error::Transport);
+    assert(d.normal_refs[7].checksum == reference_checksum);
+    // A gap arriving just after a bin boundary cannot complete the last OFF
+    // or ON bin before the transport error reaches the capture state machine.
+    for (unsigned phase = 0; phase < 2; phase++) {
+        model->clear_history();
+        auto &cap = d.normal_capture;
+        cap = signal_health::Capture{};
+        cap.phase = phase ? signal_health::Phase::Normal : signal_health::Phase::Off;
+        cap.slot = 3; cap.skip = false;
+        cap.count = phase ? signal_health::WINDOW - 1 : signal_health::OFF_BINS - 1;
+        cap.candidate = signal_health::test_reference();
+        std::fill_n(cap.values, signal_health::WINDOW, 2000);
+        const unsigned bin = 500 + 2 * phase;
+        for (unsigned sample = 0; sample < 4; sample++) {
+            for (unsigned i = 0; i < rf::N; i++)
+                record.channels[i] = {bin * 100000 + sample * 1000, 2000, 2000, selected[i], 0, 30, 0};
+            model->ingest(record, bin * rf::bin_us + sample * 1000);
+        }
+        model->transport_fault(rf::SequenceGap, (bin + 1) * rf::bin_us + 1000);
+        assert(cap.phase == signal_health::Phase::Failed && cap.error == signal_health::Error::Transport);
+        assert(d.history[bin % rf::HISTORY].valid_mask == 0);
+        assert(d.normal_refs[7].checksum == reference_checksum);
+    }
     delete model;
 }

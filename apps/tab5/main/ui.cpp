@@ -2,6 +2,7 @@
 #include "bsp/display.h"
 #include "bsp/m5stack_tab5.h"
 #include "esp_heap_caps.h"
+#include "esp_app_desc.h"
 #include "esp_log.h"
 #include "esp_timer.h"
 #include <algorithm>
@@ -37,6 +38,8 @@ bool show_search = false, show_imd = false, modal_open = false, show_delta = fal
 int selected = 20;
 unsigned ticks = 0;
 uint32_t last_draw_us = 0, max_draw_us = 0, last_ui_us = 0;
+int64_t rate_started_us = 0;
+uint32_t rate_records = 0, records_per_second = 0;
 unsigned last_water_sweeps = UINT32_MAX, last_water_count = UINT32_MAX, last_water_revision = UINT32_MAX,
          last_water_stride = UINT32_MAX;
 bool last_water_delta = false, last_water_active = false;
@@ -185,8 +188,8 @@ void history_plot(int64_t now) {
         std::snprintf(s, sizeof(s), "%+d", val);
         text(axis[i], s);
     }
-    text(history_title, relative ? "60秒履歴 / 現在の背景との差 dB（線：平均・点：ピーク）"
-                                 : "60秒履歴 / 受信値 dB（線：平均・点：ピーク）");
+    text(history_title, relative ? "60秒 RAW-背景 dB / 100ms電力平均・PK"
+                                 : "60秒 RAW dB / 100ms電力平均・PK");
     lv_obj_invalidate(history_canvas);
 }
 void spectrum_plot() {
@@ -468,6 +471,8 @@ const char *unknown_jp(signal_health::Reason why) {
         return "監視中断";
     case R::Invalid:
         return "測定無効";
+    case R::Transport:
+        return "通信欠落";
     case R::Warming:
         return "評価中";
     case R::Recording:
@@ -562,6 +567,10 @@ void refresh_normal() {
                           "待って取り直してください。以前の保存基準は保持されています。",
                           (cap.candidate.p90 - cap.candidate.p10) / 100.f,
                           (cap.candidate.median - cap.candidate.minimum) / 100.f);
+        else if (cap.error == E::Transport)
+            std::snprintf(s, sizeof(s),
+                          "保存しませんでした。USB通信の欠落・CRC・C5の取りこぼしを検出しました。\n"
+                          "接続と給電を確認し、全機OFFからやり直してください。以前の保存基準は保持されています。");
         else
             std::snprintf(s, sizeof(s),
                           "保存しませんでした。欠測・飽和・受信条件・保存状態を確認し、全機OFFからやり直して"
@@ -645,6 +654,12 @@ void update(lv_timer_t *) {
     const int64_t update_started = esp_timer_get_time();
     app_copy_data(view);
     const int64_t now = esp_timer_get_time();
+    if (!rate_started_us) { rate_started_us = now; rate_records = view->records; }
+    if (now - rate_started_us >= 1000000) {
+        records_per_second = uint64_t(uint32_t(view->records - rate_records)) * 1000000 / (now - rate_started_us);
+        rate_records = view->records; rate_started_us = now;
+    }
+    const bool transport_bad = view->transport_us && now - view->transport_us < 1000000;
     const bool next_search = view->mode == rf::Mode::Search || view->mode == rf::Mode::BackgroundSweep;
     if (next_search != show_search) {
         show_search = next_search;
@@ -686,7 +701,7 @@ void update(lv_timer_t *) {
             const int base = view->background_active ? view->background.monitor[i] : 0;
             std::snprintf(s, sizeof(s), "%+.1f", (c.filtered - base) / 100.f);
             text(values[i], s);
-            text(units[i], view->background_active ? "背景差 dB" : "受信値 dB");
+            text(units[i], view->background_active ? "F-BG dB" : "FILT dB");
             char peak_text[24];
             if (c.peak == rf::missing)
                 std::snprintf(peak_text, sizeof(peak_text), "--.-");
@@ -697,14 +712,32 @@ void update(lv_timer_t *) {
             text(states[i], c.alert ? "予定外上昇" : view->background_active ? "測定中" : "背景未取得");
         } else {
             text(values[i], "--.-");
-            text(units[i], view->background_active ? "背景差 dB" : "受信値 dB");
+            text(units[i], view->background_active ? "F-BG dB" : "FILT dB");
             text(raw_labels[i], "RAW --.-   PK --.-");
             text(states[i], recent_bad              ? "測定注意"
                             : view->background_busy ? "背景記録中"
                             : show_search           ? "監視中断"
                                                     : "未取得");
         }
-        lv_obj_set_style_text_color(states[i], lv_color_hex(c.alert || recent_bad ? AMBER : DIM), 0);
+        if (!show_search && recent_bad) {
+            if (c.last_issues & rf::Clipped)
+                std::snprintf(s, sizeof(s), "飽和 CLIP%u F%02X", c.last_bad_clips, c.last_bad_flags);
+            else if (c.last_issues & rf::GainMoved)
+                std::snprintf(s, sizeof(s), "GAIN不一致 %u F%02X", c.last_bad_gain, c.last_bad_flags);
+            else if (c.last_issues & rf::CaptureFailed)
+                std::snprintf(s, sizeof(s), "RF取得失敗 F%02X", c.last_bad_flags);
+            else if (c.last_issues & rf::Fallback)
+                std::snprintf(s, sizeof(s), "代替取得 F%02X", c.last_bad_flags);
+            else
+                std::snprintf(s, sizeof(s), "RAW/FILT 欠測");
+            text(states[i], s);
+        } else if (!show_search && transport_bad) {
+            const auto f = view->transport_flags;
+            text(states[i], f & rf::CrcError ? "USB CRC" : f & rf::Malformed ? "FRAME ERROR" :
+                 f & (rf::StreamReset | rf::ClockReset) ? "C5 RESET" : f & rf::SequenceGap ? "SEQ GAP" :
+                 f & rf::ChipDrop ? "C5 DROP" : "DUPLICATE");
+        }
+        lv_obj_set_style_text_color(states[i], lv_color_hex(c.alert || recent_bad || transport_bad ? AMBER : DIM), 0);
         const auto evaluation = rf::visible_normal(*view, i, now);
         health_line(s, sizeof(s), evaluation, false);
         text(level_labels[i], s);
@@ -775,9 +808,10 @@ void update(lv_timer_t *) {
                                 lv_color_hex(view->error[0] || any_alert || any_bad ? AMBER : WHITE), 0);
     text(hint_label, view->background_active ? "相対値・映像品質は未判定 / 近接チャンネルの像に注意"
                                              : "未校正の受信値 dB / 背景は全機OFFで記録してください");
-    std::snprintf(s, sizeof(s), "USB %s  CRC %lu  LOST %lu  DROP %lu  GAIN %d  BG %s",
-                  view->usb ? "ON" : "OFF", (unsigned long)view->crc, (unsigned long)view->gaps,
-                  (unsigned long)view->drops, view->settings.gain,
+    std::snprintf(s, sizeof(s), "USB %s  R %lu/s  CRC %lu  SEQ %lu  C5+ %lu  DUP %lu  CLIP %lu  G! %lu  BG %s",
+                  view->usb ? "ON" : "OFF", (unsigned long)records_per_second, (unsigned long)view->crc,
+                  (unsigned long)view->gaps, (unsigned long)view->drop_increase, (unsigned long)view->duplicates,
+                  (unsigned long)view->clip_samples, (unsigned long)view->gain_samples,
                   view->background_active   ? (view->background_saved ? "SAVED" : "RAM")
                   : view->background_stored ? "STORED"
                                             : "NONE");
@@ -806,7 +840,7 @@ void update(lv_timer_t *) {
     if (show_search)
         text(hint_label, "各枠をタップしてch選択 / WFは1行1掃引（非同時）/ 4ch中断");
     else
-        text(hint_label, "受信電力の暫定判定 / 安定性は直近10秒 / 同じ機体・設置・出力で比較");
+        text(hint_label, "数値:FILT平滑値 / 履歴:RAWの100ms電力平均・PK / 判定:同じ機体・設置・出力");
     if (!view->background_active)
         show_delta = false;
     button_text(scale_button, show_delta ? "表示:背景差" : "表示:受信値");
@@ -882,7 +916,9 @@ void app_build_ui(lv_display_t *display) {
     lv_obj_remove_flag(screen, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_style_bg_color(screen, lv_color_hex(BG), 0);
     lv_obj_set_style_bg_opa(screen, LV_OPA_COVER, 0);
-    label(screen, "RF FIELD MONITOR", 24, 16, 650, &lv_font_montserrat_28);
+    char title[80];
+    std::snprintf(title, sizeof(title), "RF FIELD MONITOR / %s", esp_app_get_description()->version);
+    label(screen, title, 24, 16, 790, &lv_font_montserrat_28);
     status = label(screen, "C5 接続待ち", 870, 21, 385, &rf_jp20);
     monitor_nav =
         button(screen, "4ch履歴", 208, 66, 180, 46, [](lv_event_t *) { app_post(ActionType::Monitor); });
@@ -920,7 +956,7 @@ void app_build_ui(lv_display_t *display) {
             reinterpret_cast<void *>(uintptr_t(i)));
         lv_obj_set_style_text_color(lv_obj_get_child(channel_buttons[i], 0), lv_color_hex(traces[i]), 0);
         values[i] = label(card, "--.-", 14, 50, 180, &lv_font_montserrat_40);
-        units[i] = label(card, "受信値 dB", 184, 76, 100, &rf_jp20, DIM);
+        units[i] = label(card, "FILT dB", 184, 76, 100, &rf_jp20, DIM);
         raw_labels[i] = label(card, "RAW --.-   PK --.-", 14, 102, 268, &lv_font_montserrat_20, DIM);
         level_labels[i] = label(card, "レベル 灰:基準なし", 14, 132, 268, &rf_jp20, DIM);
         stability_labels[i] = label(card, "安定性 灰:基準なし", 14, 160, 268, &rf_jp20, DIM);
@@ -1027,5 +1063,7 @@ void app_ui_diagnostics() {
     for (unsigned i = 0; i < 4; i++)
         ESP_LOGI("RF4_UI", "health%u level=%s stability=%s", i, lv_label_get_text(level_labels[i]),
                  lv_label_get_text(stability_labels[i]));
+    ESP_LOGI("RF4_UI", "unit0=%s history=%s diagnostics=%s", lv_label_get_text(units[0]),
+             lv_label_get_text(history_title), lv_label_get_text(health));
     bsp_display_unlock();
 }

@@ -24,3 +24,13 @@ jobs:
         working-directory: apps/pyramid
       - run: node --check apps/pyramid/ui.js
       - run: node --check apps/pyramid/labels-ui.js
+
+  tab5-core:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - run: g++ -std=c++17 -O2 -Wall -UNDEBUG -Imain tools/host_self_test.cpp main/rf_self_test.cpp -o /tmp/tab5-host-self-test
+        working-directory: apps/tab5
+      - run: /tmp/tab5-host-self-test

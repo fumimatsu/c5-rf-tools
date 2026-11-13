@@ -4,7 +4,7 @@
   "weight": 500,
   "fonttools": "4.60.1",
   "lv_font_conv": "1.5.3",
-  "unicode_glyphs": 273,
+  "unicode_glyphs": 279,
   "ascii": "0x20-0x7e",
   "sizes": [
     20,
