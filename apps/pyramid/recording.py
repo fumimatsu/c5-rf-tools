@@ -9,6 +9,7 @@ import secrets
 import sqlite3
 import threading
 import time
+from scanner_recording import ScannerWriter, SCHEMA as SCANNER_SCHEMA, encoded_frame, chart_window
 
 
 class Writer:
@@ -66,11 +67,11 @@ class Writer:
 
     def status(self):
         with self.lock:
-            return dict(id=self.id, recording=not self.done.is_set() and not self.error,
+            return dict(id=self.id, schema='c5-native-recording/1', recording=not self.done.is_set() and not self.error,
                         duration=round(getattr(self, 'ended', time.monotonic()) - self.started, 2),
                         rows=self.written, queued=self.queue.qsize(), dropped=self.dropped,
                         startMonotonic=self.started, createdUnix=self.created,
-                        error=self.error, closing=self.done.is_set() and self.thread.is_alive())
+                        error=self.error, reason=self.reason, closing=self.done.is_set() and self.thread.is_alive())
 
     def run(self):
         db = None
@@ -113,19 +114,21 @@ class Writer:
 
 
 class Recordings:
-    def __init__(self, root):
+    def __init__(self, root, disk_min_bytes=256*1024**2):
         self.root = Path(root).resolve()
         self.root.mkdir(parents=True, exist_ok=True)
         self.lock = threading.RLock()
         self.current = None
         self.last = None
         self.writers = {}
+        self.disk_min_bytes = disk_min_bytes
 
-    def start(self, context):
+    def start(self, context, kind='native'):
         with self.lock:
             if self.current:
                 raise ValueError('既に記録中です')
-            self.current = Writer(self.root, context)
+            self.current = (ScannerWriter(self.root, context, disk_min_bytes=self.disk_min_bytes)
+                            if kind == 'scanner' else Writer(self.root, context))
             self.last = self.current
             self.writers = {i: w for i, w in self.writers.items() if w.thread.is_alive() or w.error}
             self.writers[self.current.id] = self.current
@@ -134,6 +137,15 @@ class Recordings:
     def append(self, kind, data, slot=None, at=None):
         with self.lock:
             return self.current.append(kind, data, slot, at) if self.current else False
+
+    def append_frame(self, kind, payload, at=None):
+        with self.lock:
+            return self.current.append_frame(kind,payload,at) if isinstance(self.current,ScannerWriter) else False
+
+    def observe_crc(self,count):
+        with self.lock:
+            if isinstance(self.current,ScannerWriter):
+                self.current.observe_crc(count)
 
     def stop(self, reason):
         with self.lock:
@@ -161,9 +173,23 @@ class Recordings:
         return sqlite3.connect(p.as_uri() + '?mode=ro', uri=True, timeout=2)
 
     def metadata(self, recording_id):
+        writer=self.writers.get(recording_id)
+        if isinstance(writer,ScannerWriter):
+            if not writer.ready.wait(2):
+                raise ValueError('記録ファイルを準備しています')
+            if writer.error:
+                meta=copy.deepcopy(writer.meta)
+                meta.update(status='error',error=writer.error,rows=writer.written,recordingKind='scanner')
+                return meta
         with closing(self.connect(recording_id)) as db:
             meta = json.loads(db.execute('SELECT data FROM metadata WHERE id=1').fetchone()[0])
-            count, duration = db.execute('SELECT count(*),max(t) FROM rows').fetchone()
+            if meta.get('schema') not in [SCANNER_SCHEMA,'c5-native-recording/1']:
+                raise ValueError('未対応の記録形式です')
+            if meta.get('schema') == SCANNER_SCHEMA:
+                duration = db.execute('SELECT max(t) FROM frames').fetchone()[0]
+                count = meta.get('rows',0)  # Committed with the frame batch, no full-table count per refresh.
+            else:
+                count, duration = db.execute('SELECT count(*),max(t) FROM rows').fetchone()
         live = self.status(recording_id)
         meta['rows'] = count
         meta['duration'] = max(meta.get('duration', 0), duration or 0)
@@ -174,6 +200,7 @@ class Recordings:
             meta.update(dropped=live['dropped'], error=live['error'])
             if live['error']:
                 meta['status'] = 'error'
+        meta['recordingKind'] = 'scanner' if meta.get('schema') == SCANNER_SCHEMA else 'native'
         return meta
 
     def catalog(self):
@@ -189,6 +216,9 @@ class Recordings:
         if not 1 <= seconds <= 120 or not 0 <= end <= 1e8:
             raise ValueError('再生範囲が不正です')
         meta = self.metadata(recording_id)
+        if meta.get('schema') == SCANNER_SCHEMA:
+            with closing(self.connect(recording_id)) as db:
+                return chart_window(db,meta,end,seconds)
         end = min(end, meta['duration'])
         start = max(0, end - seconds)
         with closing(self.connect(recording_id)) as db:
@@ -201,5 +231,12 @@ class Recordings:
         meta = self.metadata(recording_id)
         yield json.dumps(dict(kind='metadata', data=meta), ensure_ascii=False) + '\n'
         with closing(self.connect(recording_id)) as db:
-            for row in db.execute('SELECT data FROM rows ORDER BY seq'):
-                yield row[0] + '\n'
+            if meta.get('schema') == SCANNER_SCHEMA:
+                cutoff = db.execute('SELECT max(record_seq) FROM frames').fetchone()[0] or 0
+                for row in db.execute('SELECT record_seq,t,receivedUnix,kind,payload FROM frames WHERE record_seq<=? ORDER BY record_seq',(cutoff,)):
+                    yield json.dumps(encoded_frame(row),ensure_ascii=False)+'\n'
+                for row in db.execute('SELECT data FROM events ORDER BY seq'):
+                    yield json.dumps(dict(kind='archive_event',data=json.loads(row[0])))+'\n'
+            else:
+                for row in db.execute('SELECT data FROM rows ORDER BY seq'):
+                    yield row[0] + '\n'

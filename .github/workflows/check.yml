@@ -20,6 +20,7 @@ jobs:
         with:
           node-version: '22'
       - run: python -m pip install -r apps/pyramid/requirements.txt
-      - run: python -m unittest -v test_protocol test_recording test_portability
+      - run: python -m unittest -v test_protocol test_recording test_portability test_scanner test_scanner_http
         working-directory: apps/pyramid
       - run: node --check apps/pyramid/ui.js
+      - run: node --check apps/pyramid/labels-ui.js
