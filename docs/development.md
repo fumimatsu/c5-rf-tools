@@ -1,6 +1,6 @@
 # 開発手順
 
-現在の次の実装は[4波比較測定](four-wave-comparison.md)。接続/配備手順と実装仕様を分けて参照する。
+0.2.2の記録・教示基盤は配備済み。[実装・検証と戻し方](../apps/pyramid/docs/0.2.2-recording-labels.md)を確認し、その上で[4波比較測定](four-wave-comparison.md)へ進む。
 
 ## Pyramid: Windows / LinuxのPCで検証
 
@@ -10,8 +10,9 @@ Python 3.10以上、Node.js（JS構文チェック用）を用意します。
 cd apps/pyramid
 python -m venv .venv
 .venv/Scripts/python -m pip install -r requirements.txt
-.venv/Scripts/python -m unittest -v test_protocol test_recording test_portability
+.venv/Scripts/python -m unittest -v test_protocol test_recording test_portability test_scanner test_scanner_http
 node --check ui.js
+node --check labels-ui.js
 .venv/Scripts/python server.py --serial 00:00:00:00:00:01 --data .local/dev-data
 ```
 
@@ -23,7 +24,7 @@ Linuxでは `.venv/bin/python` に読み替えます。`http://127.0.0.1:8765/` 
 
 1. SSH先と認証を手元で確認します。認証情報・host keyはリポジトリに保存しません。
 2. `systemctl cat c5-monitor.service` と `/api/state` で実行パス、版、C5シリアル、記録状態を確認。
-3. 新しいソースを `/opt/c5-rf-tools/0.2.1/apps/pyramid` など旧版と別の場所へ配置。
+3. 新しいソースを `/opt/c5-monitor/<新しい版>` など実行中の版と別の場所（現行は `/opt/c5-monitor/0.2.2`）へ配置。
 4. 新しい場所でPythonテストを実行。既存のUSB所有サービスを動かしたまま、2つ目の受信プロセスを起動しない。
 5. 既存サービス定義をバックアップ。記録停止を確認し、`/etc/c5-monitor.env` に対象の `C5_SERIAL` を設定して `c5-monitor.service` テンプレートのパスを確認。
 6. サービス定義を更新し、daemon-reload / restart。`/var/lib/c5-monitor` を保持する。

@@ -8,8 +8,8 @@ DynamicUser=yes
 SupplementaryGroups=dialout
 StateDirectory=c5-monitor
 EnvironmentFile=/etc/c5-monitor.env
-WorkingDirectory=/opt/c5-rf-tools/0.2.1/apps/pyramid
-ExecStart=/usr/bin/python3 /opt/c5-rf-tools/0.2.1/apps/pyramid/server.py --data /var/lib/c5-monitor --bind 0.0.0.0 --port 8765
+WorkingDirectory=/opt/c5-monitor/0.2.2
+ExecStart=/usr/bin/python3 /opt/c5-monitor/0.2.2/server.py --data /var/lib/c5-monitor --bind 0.0.0.0 --port 8765
 Environment=PYTHONDONTWRITEBYTECODE=1
 Environment=PYTHONUNBUFFERED=1
 Restart=on-failure

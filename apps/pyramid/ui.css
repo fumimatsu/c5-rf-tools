@@ -3,3 +3,5 @@
 @media(max-width:1450px){.cards{grid-template-columns:repeat(2,minmax(0,1fr))}.spark{height:155px}.workspace{grid-template-columns:minmax(0,1fr) 310px}}
 @media(max-width:1000px){.workspace{grid-template-columns:1fr}aside{display:grid;grid-template-columns:1fr 1fr;gap:12px}header{flex-wrap:wrap}.right{margin-left:0}.cardTop select{max-width:175px}#modeNote{width:100%}}
 @media(max-width:560px){main{padding:12px}.cards{gap:7px}.card{padding:9px}.level{font-size:28px;gap:5px}.cardTop{flex-wrap:wrap}.cardTop select{width:100%}.spark{height:140px}aside{display:block}header{padding:12px}h1{font-size:18px}.panel{padding:10px}.sectionHead{gap:8px}.freq{font-size:10px}#spectrumPlot{height:190px}#waterfall{height:280px}}
+
+.humanButton{min-width:120px;padding:12px;font-weight:600;border-left:3px solid #b7cbd5}#labelPanel .toolbar{margin:8px 0}#labelMessage{white-space:pre-line}body.blindLabel #cards,body.blindLabel #spectrum,body.blindLabel #eventsPanel{display:none!important}#labelPanel input[type=number]{width:95px}#trainingDownload:not([href]){opacity:.4;pointer-events:none}

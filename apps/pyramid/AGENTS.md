@@ -13,14 +13,13 @@ Details and proposed phases: docs/automation-plan.md.
 Implement C5 four-VTX comparison measurement first, then evaluate AI/NPU using
 the saved evidence. Read `../../docs/four-wave-comparison.md` for the ten states,
 raw scanner power, linear-addition comparison, validity and acceptance contract.
-This comparison mode is planned, not implemented. Earlier gate-label-first work
-is deferred; preserve native timing records and keep new RF comparison data distinct.
+The ten-state comparison mode is planned, not implemented. The subsequent user instruction authorized the 0.2.2 scanner-recording, independent-label and training-source foundation; it is implemented and deployed. Read docs/0.2.2-recording-labels.md. Preserve native records and keep units and label provenance distinct.
 
 ## Boundaries
 
 - C5MK 1.2.5+xiaoc5 on the explicitly configured USB serial. Host/serial/auth settings are local.
   The separate Tab5 and its C5 are outside this application's device ownership.
-- The 0.2.0 adds native snapshot archives and read-only desktop replay. AI classification,
+- Version 0.2.2 preserves native archives and adds scanner payloads, a separate append-only human-label ledger and training-source export. AI classification,
   automatic threshold adoption and MADSYSTEM publication are not implemented.
 - Preserve receiver dB versus RH 1-254 units, missing data, CRC/RF errors and
   measurement provenance. No dBm/SNR/interference-percentage or VTX-fault claims.
@@ -41,7 +40,7 @@ is deferred; preserve native timing records and keep new RF comparison data dist
 
 ## Verification
 
-Run `python -m unittest -v test_protocol test_recording test_portability` and `node --check ui.js` after
+Run `python -m unittest -v test_protocol test_recording test_portability test_scanner test_scanner_http` and `node --check ui.js` and `node --check labels-ui.js` after
 UI/protocol changes. Check the actual Pyramid and browser, not only local mocks.
 RF ON/OFF is not gate-pass accuracy. Report unverified physical passes, USB
 reconnection and whole-device restart separately from service restart tests.

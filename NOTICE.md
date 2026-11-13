@@ -3,7 +3,7 @@
 Protocol formats derive from **FPVGateC5MK**, copyright (c) 2026 Louis Hitchcock:
 https://github.com/LouisHitchcock/FPVGateC5MK — CC BY-NC-SA 4.0.
 Our changes: separate Tab5/LVGL and Linux/Web clients, display, background capture,
-native RH snapshot archiving/replay, portability and development documentation.
+native RH snapshot archiving/replay, immutable scanner payload archiving, separate human-label ledgers, training-source exports, portability and development documentation.
 The original C5 RF firmware is not modified or distributed here.
 
 Vendored `apps/tab5/components/{m5stack_tab5,esp_lcd_st7121,esp_lvgl_port}` come

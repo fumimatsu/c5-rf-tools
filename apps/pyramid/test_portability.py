@@ -14,6 +14,15 @@ import urllib.request
 from server import re_serial
 
 
+def stop_server(process):
+    if os.name=='nt' and process.poll() is None:
+        # terminate() on Windows only kills the parent; replay workers inherit its pipes.
+        subprocess.run(['taskkill','/PID',str(process.pid),'/T','/F'],capture_output=True,timeout=8)
+    else:
+        process.terminate()
+    process.communicate(timeout=8)
+
+
 class PortableTests(unittest.TestCase):
     def test_explicit_serial_required(self):
         env = dict(os.environ)
@@ -46,7 +55,7 @@ class PortableTests(unittest.TestCase):
                         time.sleep(.05)
                 token = re.search(r'name="control-token" content="([^"]+)"', html)[1]
                 self.assertNotEqual(token, '__CONTROL_TOKEN__')
-                for path, expected in [('/ui.js', b'loadRecording'), ('/ui.css', b'.workspace')]:
+                for path, expected in [('/ui.js', b'loadRecording'), ('/ui.css', b'.workspace'),('/labels-ui.js',b'addHuman')]:
                     with urllib.request.urlopen(base+path, timeout=2) as r:
                         self.assertIn(expected, r.read())
                 with urllib.request.urlopen(base+'/api/state', timeout=2) as r: state=json.load(r)
@@ -62,10 +71,7 @@ class PortableTests(unittest.TestCase):
                 self.assertEqual(error.exception.code, 403)
                 self.assertTrue((Path(root)/'recordings').is_dir())
             finally:
-                process.terminate()
-                try: process.communicate(timeout=8)
-                except subprocess.TimeoutExpired:
-                    process.kill();process.communicate(timeout=3)
+                stop_server(process)
 
 
 if __name__ == '__main__':
