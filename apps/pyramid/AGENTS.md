@@ -8,6 +8,14 @@ timing thresholds. Use CPU statistics, replay and labelled measurements first;
 use the NPU when a tested model improves detection or reduces operator work.
 Details and proposed phases: docs/automation-plan.md.
 
+## Current priority (2026-11-14)
+
+Implement C5 four-VTX comparison measurement first, then evaluate AI/NPU using
+the saved evidence. Read `../../docs/four-wave-comparison.md` for the ten states,
+raw scanner power, linear-addition comparison, validity and acceptance contract.
+This comparison mode is planned, not implemented. Earlier gate-label-first work
+is deferred; preserve native timing records and keep new RF comparison data distinct.
+
 ## Boundaries
 
 - C5MK 1.2.5+xiaoc5 on the explicitly configured USB serial. Host/serial/auth settings are local.

@@ -6,5 +6,5 @@
 - Keep real serials, IP/auth settings, flash backups and measurements under ignored `.local/` or on the device. Never replace recorded measurements with simulation.
 - Local tests/builds do not flash hardware. Before flashing or deploying, identify the exact device, compare current source/runtime versions and preserve rollback/state. No other COM device is in scope.
 - Run the relevant Python tests + JS syntax check for Pyramid, or ESP-IDF 5.4.2 build for Tab5. Report actual device verification separately.
-- Next feature: independently labelled gate/non-gate observations before threshold candidates. Do not silently implement adaptive thresholds or publish timing to MADSYSTEM.
+- Next approved feature (2026-11-14): Pyramid four-VTX comparison measurement, then AI/NPU evaluation. Read `docs/four-wave-comparison.md`; this supersedes the earlier gate-label-first priority. Gate labels/threshold candidates remain later work. Do not silently implement adaptive thresholds or publish timing to MADSYSTEM.
 - Preserve LICENSE, notices, upstream attribution and separate third-party licences.

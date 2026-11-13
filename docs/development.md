@@ -1,5 +1,7 @@
 # 開発手順
 
+現在の次の実装は[4波比較測定](four-wave-comparison.md)。接続/配備手順と実装仕様を分けて参照する。
+
 ## Pyramid: Windows / LinuxのPCで検証
 
 Python 3.10以上、Node.js（JS構文チェック用）を用意します。
