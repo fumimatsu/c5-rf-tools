@@ -24,7 +24,8 @@ enum class Reason : uint8_t {
     Range,
     Dips,
     Within,
-    Recovering
+    Recovering,
+    Transport
 };
 enum class Phase : uint8_t { Idle, Preparing, Off, AwaitOn, Normal, Ready, Saved, Failed, Cancelled };
 enum class Error : uint8_t {
@@ -36,7 +37,8 @@ enum class Error : uint8_t {
     Save,
     Cancelled,
     Disconnected,
-    Timeout
+    Timeout,
+    Transport
 };
 inline const char *grade_name(Grade g) {
     switch (g) {

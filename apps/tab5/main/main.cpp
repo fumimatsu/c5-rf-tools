@@ -25,8 +25,8 @@ static rf::Model *model;
 static SemaphoreHandle_t mutex, disconnected;
 static QueueHandle_t actions;
 static c5::Decoder decoder;
-static bool have_sequence = false, nvs_ok = false;
-static uint16_t sequence = 0;
+static bool nvs_ok = false;
+static c5::StreamTracker stream_tracker;
 struct Lock {
     Lock() {
         xSemaphoreTake(mutex, portMAX_DELAY);
@@ -148,35 +148,34 @@ static void on_frame(uint8_t type, const uint8_t *p, size_t n, void *) {
     c5::Record record{};
     if (!c5::read_record(p, n, record)) {
         ++d.malformed;
-        model->bg_failed = true;
+        model->transport_fault(rf::Malformed, esp_timer_get_time());
         return;
     }
-    if (have_sequence) {
-        const uint16_t step = uint16_t(record.seq - sequence);
-        if (step && step < 32768) {
-            d.gaps += step - 1;
-            if (step > 1)
-                model->bg_failed = true;
-        } else {
-            ++d.resync;
-            model->bg_failed = true;
-        }
-    }
-    sequence = record.seq;
-    have_sequence = true;
-    model->ingest(record, esp_timer_get_time());
+    const auto delta = stream_tracker.observe(record);
+    d.gaps += delta.gaps;
+    d.drop_increase += delta.drops;
+    d.duplicates += delta.duplicate;
+    d.resync += delta.reset;
+    uint8_t reason = (delta.gaps ? rf::SequenceGap : 0) | (delta.drops ? rf::ChipDrop : 0) |
+                     (delta.duplicate ? rf::Duplicate : 0) | (delta.reset ? rf::StreamReset : 0);
+    const auto now = esp_timer_get_time();
+    if (reason) model->transport_fault(reason, now);
+    model->ingest(record, now);
+}
+static void on_decoder_error(c5::FrameError error, void *) {
+    Lock lock;
+    model->transport_fault(error == c5::FrameError::Crc ? rf::CrcError : rf::Malformed,
+                           esp_timer_get_time());
 }
 static bool receive(const uint8_t *p, size_t n, void *) {
     {
         Lock lock;
         model->data.bytes += n;
     }
-    decoder.feed(p, n, on_frame, nullptr);
+    decoder.feed(p, n, on_frame, nullptr, on_decoder_error);
     {
         Lock lock;
         auto &d = model->data;
-        if (d.crc != decoder.crc_errors || decoder.bad_lengths)
-            model->bg_failed = true;
         d.crc = decoder.crc_errors;
         d.malformed += decoder.bad_lengths;
         decoder.bad_lengths = 0;
@@ -721,7 +720,7 @@ static void receiver_task(void *) {
     config.data_cb = receive;
     for (;;) {
         decoder.reset();
-        have_sequence = false;
+        stream_tracker.reset();
         while (xSemaphoreTake(disconnected, 0) == pdTRUE) {
         }
         cdc_acm_dev_hdl_t device = nullptr;
@@ -1000,6 +999,15 @@ static void dump(const char *what) {
                    (long)r.spread, r.dips, r.longest_dip, r.count, ref.median, ref.off_p95,
                    (unsigned long)ref.checksum);
         }
+    } else if (!std::strcmp(what, "quality")) {
+        printf("RF_QUALITY records=%lu seq_gaps=%lu c5_drop_total=%lu c5_drop_increase=%lu duplicates=%lu "
+               "resets=%lu crc=%lu malformed=%lu transport_faults=%lu transport_flags=%u "
+               "clips=%lu gain=%lu capture_fail=%lu fallback=%lu missing=%lu\n",
+               (unsigned long)d->records, (unsigned long)d->gaps, (unsigned long)d->drops,
+               (unsigned long)d->drop_increase, (unsigned long)d->duplicates, (unsigned long)d->resync,
+               (unsigned long)d->crc, (unsigned long)d->malformed, (unsigned long)d->transport_faults,
+               d->transport_flags, (unsigned long)d->clip_samples, (unsigned long)d->gain_samples,
+               (unsigned long)d->fail_samples, (unsigned long)d->fallback_samples, (unsigned long)d->missing_samples);
     } else if (!std::strcmp(what, "channels")) {
         uint16_t f[rf::N];
         rf::plan_frequencies(d->plan, f);
@@ -1105,7 +1113,7 @@ static void self_tests_task(void *waiting) {
     rf_self_test();
     ESP_LOGI(TAG,
              "SELF_TESTS_PASSED decoder profiles linear-power background gaps flags CRC storage IMD normal "
-             "level stability stack_hwm_raw=%u",
+             "level stability transport error-order wraps reference-preservation stack_hwm_raw=%u",
              unsigned(uxTaskGetStackHighWaterMark(nullptr)));
     xTaskNotifyGive(static_cast<TaskHandle_t>(waiting));
     vTaskDelete(nullptr);

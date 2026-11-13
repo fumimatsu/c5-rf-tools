@@ -46,6 +46,7 @@ cd apps/tab5
 
 通常PowerShellからは `./build.ps1 -IdfPath <ESP-IDFのパス>`。IDF_PYTHON_ENV_PATHが必要な環境ではそのPCの値を設定してください。
 LinuxはESP-IDFをexportした後、同じディレクトリで `idf.py build`。依存はdependencies.lockで固定し、managed_componentsとbuildは生成物として除外。
+コアのPC回帰試験は `apps/tab5/tools/host_self_test.cpp`（READMEのC++17コマンド）。CIのTab5 jobはコア試験であり、実ESP-IDFビルドは別に行います。
 生成済み日本語フォントCを含むので通常ビルドにNode/fontToolsは不要。再生成は `tools/font-build/README.md` とprovenanceを参照。
 USB-C側の書き込み対象はTab5（ESP32-P4）。USB-AのC5と取り違えないでください。
 
