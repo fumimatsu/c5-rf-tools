@@ -367,9 +367,14 @@ struct Model {
         }
     }
     void transport_fault(uint8_t reason, int64_t now) {
-        // Mark the affected host bin before later valid frames can complete it.
+        // The missing interval may straddle the last open bin and the current
+        // bin. Abort capture before advancing either one to a completed state.
         // Saved references/backgrounds remain unchanged; only this capture/window is invalid.
+        if (data.normal_capture.phase == signal_health::Phase::Off ||
+            data.normal_capture.phase == signal_health::Phase::Normal)
+            data.normal_capture.fail(signal_health::Error::Transport);
         if (data.mode == Mode::Monitor || data.mode == Mode::BackgroundMonitor) {
+            for (auto &b : bucket) ++b.bad;
             expire_bin(now / bin_us);
             for (auto &b : bucket) ++b.bad;
         }
@@ -380,9 +385,6 @@ struct Model {
         data.transport_us = now;
         ++data.transport_faults;
         bg_failed = true;
-        if (data.normal_capture.phase == signal_health::Phase::Off ||
-            data.normal_capture.phase == signal_health::Phase::Normal)
-            data.normal_capture.fail(signal_health::Error::Transport);
         reset_normal();
     }
     void count_sample(const c5::Reading &r) {
@@ -576,18 +578,21 @@ struct Model {
         }
         if (data.mode != Mode::Monitor && data.mode != Mode::BackgroundMonitor)
             return;
+        bool clock_reset = false;
+        for (unsigned i = 0; i < N; i++) {
+            const auto &c = data.channel[i];
+            if (c.host_us && uint32_t(r.channels[i].source_us - c.source_us) > 0x80000000u)
+                clock_reset = true;
+        }
+        if (clock_reset) {
+            ++data.clock_resets;
+            invalidate_background("受信機の時刻が変化。背景を再確認してください");
+            transport_fault(ClockReset, now);
+        }
         expire_bin(now / bin_us);
         for (unsigned i = 0; i < N; i++) {
             const auto &x = r.channels[i];
             auto &c = data.channel[i];
-            if (c.host_us) {
-                const uint32_t advance = x.source_us - c.source_us;
-                if (advance > 0x80000000u) {
-                    ++data.clock_resets;
-                    invalidate_background("受信機の時刻が変化。背景を再確認してください");
-                    transport_fault(ClockReset, now);
-                }
-            }
             c.source_us = x.source_us;
             c.host_us = now;
             c.raw = x.raw;
