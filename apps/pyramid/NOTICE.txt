@@ -1,0 +1,13 @@
+C5 Pyramid Monitor - portable development version 0.2.1
+
+The C5MK wire-format implementation in protocol.py is based on:
+FPVGateC5MK by Louis Hitchcock
+https://github.com/LouisHitchcock/FPVGateC5MK
+Original copyright (c) 2026 Louis Hitchcock.
+CC BY-NC-SA 4.0: https://creativecommons.org/licenses/by-nc-sa/4.0/
+This adapted application is provided under the same CC BY-NC-SA 4.0 licence.
+The original RF firmware is not modified.
+
+This is a relative RF monitor and experimental timing client. Receiver dB is
+not calibrated dBm, SNR, interference percentage, or video quality. Native
+timing compatibility does not establish physical gate accuracy.

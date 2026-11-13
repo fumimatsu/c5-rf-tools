@@ -1,0 +1,99 @@
+{
+  "errors": [],
+  "checks": [
+    {
+      "scene": "normal",
+      "view": "monitor",
+      "w": 1280,
+      "h": 720,
+      "overflow": false
+    },
+    {
+      "scene": "normal",
+      "view": "survey",
+      "w": 1280,
+      "h": 720,
+      "overflow": false
+    },
+    {
+      "scene": "extra",
+      "view": "monitor",
+      "w": 1280,
+      "h": 720,
+      "overflow": false
+    },
+    {
+      "scene": "extra",
+      "view": "survey",
+      "w": 1280,
+      "h": 720,
+      "overflow": false
+    },
+    {
+      "scene": "between",
+      "view": "monitor",
+      "w": 1280,
+      "h": 720,
+      "overflow": false
+    },
+    {
+      "scene": "between",
+      "view": "survey",
+      "w": 1280,
+      "h": 720,
+      "overflow": false
+    },
+    {
+      "scene": "image",
+      "view": "monitor",
+      "w": 1280,
+      "h": 720,
+      "overflow": false
+    },
+    {
+      "scene": "image",
+      "view": "survey",
+      "w": 1280,
+      "h": 720,
+      "overflow": false
+    },
+    {
+      "scene": "imd",
+      "view": "monitor",
+      "w": 1280,
+      "h": 720,
+      "overflow": false
+    },
+    {
+      "scene": "imd",
+      "view": "survey",
+      "w": 1280,
+      "h": 720,
+      "overflow": false
+    },
+    {
+      "scene": "clip",
+      "view": "monitor",
+      "w": 1280,
+      "h": 720,
+      "overflow": false
+    },
+    {
+      "scene": "clip",
+      "view": "survey",
+      "w": 1280,
+      "h": 720,
+      "overflow": false
+    }
+  ],
+  "mobile": {
+    "w": 320,
+    "h": 920,
+    "overflow": false
+  },
+  "interactions": [
+    "planned-state warning persists after saved-state echo",
+    "IMD candidate key toggles"
+  ],
+  "notes": "HTML preview with simulated data only. No firmware or real-RF verification."
+}

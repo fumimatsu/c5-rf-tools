@@ -1,0 +1,25 @@
+# Private targets, measurements, device backups and generated output
+.local/
+.env
+.env.*
+!.env.example
+*.env
+!*.env.example
+__pycache__/
+*.py[cod]
+.venv/
+build/
+managed_components/
+node_modules/
+sdkconfig.old
+evidence/
+release/
+vendor/
+tools/font-build/input/
+*.bin
+*.elf
+*.map
+*.log
+*.sqlite3*
+*.jsonl
+SOURCE_ORIGIN.json
