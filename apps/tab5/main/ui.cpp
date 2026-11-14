@@ -1,4 +1,5 @@
 #include "app_api.h"
+#include "heat_palette.h"
 #include "bsp/display.h"
 #include "bsp/m5stack_tab5.h"
 #include "esp_heap_caps.h"
@@ -18,7 +19,7 @@ namespace {
 constexpr uint32_t BG = 0x111315, PANEL = 0x191c1f, EDGE = 0x3b4146, WHITE = 0xe2e5e7, DIM = 0x969da3,
                    AMBER = 0xd2a660;
 constexpr uint32_t traces[4] = {0x639bc0, 0x80ab83, 0xc4a25f, 0xb57c76};
-constexpr int SW = 720, SCREEN_H = 1280, PW = 608, HH = 224, SH = 168, WH = 300;
+constexpr int SW = 720, SCREEN_H = 1280, PW = 608, HH = 224, SH = 168, WH = 264;
 rf::Data *view;
 lv_obj_t *brightness_modal, *brightness_value, *brightness_message;
 bool brightness_open = false;
@@ -36,7 +37,9 @@ bool picker_open = false;
 unsigned picker_slot = 0, picker_band = 0;
 lv_obj_t *history_canvas, *spectrum_canvas, *water_canvas, *axis[4], *history_title;
 lv_obj_t *sweep_status, *cursor_label, *water_time, *modal_message, *adopt_button, *search_title;
+lv_obj_t *water_heading, *water_low, *water_mid, *water_high;
 uint16_t *history_pixels, *spectrum_pixels, *water_pixels;
+uint16_t heat_colors[256];
 lv_draw_buf_t history_buf, spectrum_buf, water_buf;
 
 bool show_search = false, show_imd = false, modal_open = false, show_delta = false;
@@ -293,8 +296,7 @@ void waterfall_plot(int64_t now) {
                 const float db = (r.level[f] - base) / 100.f;
                 const float normalized =
                     view->background_active && show_delta ? db / 30.f : (db + 10.f) / 55.f;
-                const unsigned grey = unsigned(std::clamp(28 + int(normalized * 190), 20, 220));
-                color = rgb((grey << 16) | (grey << 8) | grey);
+                color = heat_colors[std::clamp(int(normalized * 255), 0, 255)];
             }
             for (int y = y0; y < y1; y++)
                 for (int x = x0; x < x1; x++)
@@ -907,6 +909,11 @@ void update(lv_timer_t *) {
     else
         lv_obj_add_state(scale_button, LV_STATE_DISABLED);
     if (show_search) {
+        const bool delta = view->background_active && show_delta;
+        text(water_heading, delta ? "WF / 色:背景差 dB / 斜線:欠測" : "WF / 色:受信 dB / 斜線:欠測");
+        text(water_low, delta ? "<= 0" : "<= -10");
+        text(water_mid, delta ? "+15" : "+17.5");
+        text(water_high, delta ? ">= +30 dB" : ">= +45 dB");
         selected = rf::nearest_sweep_index(selected, view->sweep_stride);
         std::snprintf(s, sizeof(s), "5645-5917 MHz / %s dB / %u MHz刻み",
                       view->background_active && show_delta ? "基準比" : "受信値", 2 * view->sweep_stride);
@@ -967,6 +974,8 @@ void update(lv_timer_t *) {
 }
 } // namespace
 void app_build_ui(lv_display_t *display) {
+    for (unsigned i = 0; i < 256; i++)
+        heat_colors[i] = rgb(heat_palette::jet(float(i) / 255));
     view = new rf::Data;
     assert(view);
     bsp_display_rotate(display, LV_DISPLAY_ROTATION_0);
@@ -1097,10 +1106,21 @@ void app_build_ui(lv_display_t *display) {
     label(search, "5780", 350, 394, 100, &lv_font_montserrat_20, DIM);
     label(search, "5917 MHz", 580, 394, 112, &lv_font_montserrat_20, DIM);
     cursor_label = label(search, "未取得", 20, 430, 680, &rf_jp20);
-    label(search, "WF / 1行=1掃引 / 色線:ch・濃淡:受信", 20, 494, 680, &rf_jp20, DIM);
+    water_heading = label(search, "WF / 色:受信 dB / 斜線:欠測", 20, 494, 680, &rf_jp20, DIM);
     bind_canvas(search, water_canvas, water_buf, water_pixels, 84, 530, WH);
-    water_time = label(search, "掃引完了後に履歴を表示", 20, 846, 680, &rf_jp20, DIM);
-    sweep_status = label(search, "", 20, 878, 680, &rf_jp20, DIM);
+    auto *scale = panel(search, 84, 806, PW, 10);
+    lv_obj_set_style_border_width(scale, 0, 0);
+    for (unsigned i = 0; i < 32; i++) {
+        auto *cell = panel(scale, i * PW / 32, 0, PW / 32, 10);
+        lv_obj_set_style_border_width(cell, 0, 0);
+        lv_obj_set_style_bg_color(cell, lv_color_hex(heat_palette::jet(float(i) / 31)), 0);
+    }
+    water_low = label(search, "<= -10", 84, 824, 170, &lv_font_montserrat_20, DIM);
+    water_mid = label(search, "+17.5", 330, 824, 150, &lv_font_montserrat_20, DIM);
+    water_high = label(search, ">= +45 dB", 540, 824, 152, &lv_font_montserrat_20, DIM);
+    lv_obj_set_style_text_align(water_high, LV_TEXT_ALIGN_RIGHT, 0);
+    water_time = label(search, "掃引完了後に履歴を表示", 20, 854, 680, &rf_jp20, DIM);
+    sweep_status = label(search, "", 20, 882, 680, &rf_jp20, DIM);
     notice_label = label(screen, "C5の接続を待っています", 20, 1130, 680, &rf_jp20);
     hint_label = label(screen, "未校正の受信値 dB", 20, 1180, 680, &rf_jp20, DIM);
     health = label(screen, "USB OFF", 20, 1230, 680, &lv_font_montserrat_20, DIM);

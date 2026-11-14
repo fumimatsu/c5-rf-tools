@@ -1,5 +1,6 @@
 // Software-only layout/navigation test. Synthetic RF values are never sent to hardware.
 #include "app_api.h"
+#include "heat_palette.h"
 #include <cassert>
 #include <cstdio>
 #include <cstring>
@@ -74,6 +75,12 @@ static void snapshot(const char *name) {
     std::fclose(f);
 }
 int main() {
+    assert(heat_palette::jet(-1) == 0x0000ff);
+    assert(heat_palette::jet(0.25f) == 0x00ffff);
+    assert(heat_palette::jet(0.5f) == 0x00ff00);
+    assert(heat_palette::jet(0.75f) == 0xffff00);
+    assert(heat_palette::jet(2) == 0xff0000);
+    assert(heat_palette::jet(NAN) == 0x24292d);
     lv_init();
     auto *display = lv_display_create(720, 1280);
     lv_display_set_color_format(display, LV_COLOR_FORMAT_RGB565);
@@ -134,6 +141,14 @@ int main() {
             data->rows[row].level[i] = int16_t(500 + 2000 * std::sin(i * .15f + row * .07f));
     }
     snapshot("search");
+    assert(find(lv_screen_active(), ">= +45 dB"));
+    data->background_active = true;
+    std::fill_n(data->background.sweep, rf::SWEEP, -300);
+    data->rows[10].level[20] = rf::missing;
+    tick();
+    click("表示:受信値");
+    snapshot("search-delta");
+    assert(find(lv_screen_active(), ">= +30 dB"));
     click("高速 4MHz / 詳細へ");
     assert(actions.back().type == ActionType::SearchStep && actions.back().value == 2);
     click("4ch履歴");

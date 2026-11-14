@@ -4,11 +4,11 @@ ESP32-C5 / C5MKを使う5.8GHz電波監視・計測実験。Tab5用とAI Pyramid
 
 | ディレクトリ | 用途 | 現行ソース |
 |---|---|---|
-| `apps/tab5/` | Tab5のUSBホスト・縦4ch/WF・背景・レベル/安定性・明るさ | 0.6.0 |
-| `apps/pyramid/` | Linux上のUSB受信・LAN Web画面・全フレーム/RH記録・独立ラベル | 0.2.2 |
+| `apps/tab5/` | Tab5のUSBホスト・縦4ch/WF・背景・レベル/安定性・明るさ | 0.6.1 |
+| `apps/pyramid/` | Linux上のUSB受信・LAN Web画面・全フレーム/RH記録・独立ラベル | 0.2.3（未配備） |
 | `docs/` | 共通の測定境界、別PCでの開発・引き継ぎ | |
 
-Pyramid 0.2.2を実機配備・確認済み。Tab5は縦画面と明るさ調整を加えた0.6.0を配備済みです。別PCへのcloneは自動配備や測定履歴のコピーを行いません。
+Pyramid実機は0.2.2のまま。青→赤のJet WFを加えたPyramid 0.2.3はソース更新のみです。Tab5はJet WFを含む0.6.1を配備済み。[色と検証範囲](docs/jet-waterfalls.md)。別PCへのcloneは自動配備や測定履歴のコピーを行いません。
 [0.2.2の記録形式・実機検証・戻し方](apps/pyramid/docs/0.2.2-recording-labels.md)。
 
 ## 必要な機材・状態

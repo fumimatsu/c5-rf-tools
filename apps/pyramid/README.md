@@ -1,4 +1,4 @@
-# C5 Pyramid Monitor 0.2.2
+# C5 Pyramid Monitor 0.2.3
 
 AI Pyramid-Pro / Ubuntu 22.04 / Python 3.10 + system pySerial 3.5.
 Target: an explicitly selected XIAO ESP32-C5 running unchanged C5MK 1.2.5+xiaoc5. Device serial is provided locally, not hardcoded.
@@ -12,6 +12,8 @@ the unrelated Blackbox Flight Analyzer checkout.
 Portable setup and deployment: ../../docs/development.md. For LAN operation pass --bind 0.0.0.0.
 Version 0.2.2 includes the portable serial/environment settings and is deployed on the existing Pyramid.
 [Scanner archives, independent labels, AI-source export, evidence and rollback](docs/0.2.2-recording-labels.md).
+
+Version 0.2.3 changes the waterfall to blue/cyan/green/yellow/red with a numeric legend and gray hatching for missing samples. Absolute range: −10..+45 receiver dB; background delta: 0..+30 dB. Red means higher received power, not a fault. This version is source-only: the disconnected Pyramid remains on 0.2.2. The service template targets the future `/opt/c5-monitor/0.2.3` deployment. [Verification and deployment boundaries](../../docs/jet-waterfalls.md).
 
 The systemd unit runs with DynamicUser and dialout, owns only this C5 serial
 device, and stores config, background and trial passes in its StateDirectory.

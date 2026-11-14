@@ -26,7 +26,7 @@ from protocol import Frames, RH, PassTracker, reading
 from recording import Recordings
 from labels import Labels
 
-VERSION = '0.2.2'
+VERSION = '0.2.3'
 SERIAL = os.environ.get('C5_SERIAL', '')
 BANDS = {
     'R': [5658, 5695, 5732, 5769, 5806, 5843, 5880, 5917],
