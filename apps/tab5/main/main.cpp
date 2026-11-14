@@ -2,6 +2,8 @@
 #include "bsp/display.h"
 #include "bsp/m5stack_tab5.h"
 #include "decoder_self_test.h"
+#include "driver/ledc.h"
+#include "driver/gpio.h"
 #include "esp_heap_caps.h"
 #include "esp_log.h"
 #include "esp_timer.h"
@@ -27,6 +29,7 @@ static QueueHandle_t actions;
 static c5::Decoder decoder;
 static bool nvs_ok = false;
 static c5::StreamTracker stream_tracker;
+static unsigned brightness_percent = 10;
 struct Lock {
     Lock() {
         xSemaphoreTake(mutex, portMAX_DELAY);
@@ -35,6 +38,21 @@ struct Lock {
         xSemaphoreGive(mutex);
     }
 };
+unsigned app_brightness() {
+    Lock lock;
+    return brightness_percent;
+}
+bool app_set_brightness(unsigned percent) {
+    if (percent < 5 || percent > 100) return false;
+    Lock lock;
+    const auto error = bsp_display_brightness_set(int(percent));
+    if (error != ESP_OK) {
+        ESP_LOGW(TAG, "Brightness unchanged: %s", esp_err_to_name(error));
+        return false;
+    }
+    brightness_percent = percent;
+    return true;
+}
 bool app_post(ActionType type, unsigned value) {
     const Action a{type, value, esp_timer_get_time()};
     return xQueueSend(actions, &a, 0) == pdTRUE;
@@ -1103,6 +1121,19 @@ static void console_task(void *) {
             dump("status");
         else if (!std::strcmp(text, "rf ui"))
             app_ui_diagnostics();
+        else if (!std::strcmp(text, "rf brightness")) {
+            printf("RF_BRIGHTNESS percent=%u boot=10 persisted=0\n", app_brightness());
+            // Readback for this bundled BSP: GPIO22, channel1, timer0, 12-bit.
+            printf("RF_BACKLIGHT duty=%lu/4095 frequency_hz=%lu gpio=22\n",
+                   (unsigned long)ledc_get_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_1),
+                   (unsigned long)ledc_get_freq(LEDC_LOW_SPEED_MODE, LEDC_TIMER_0));
+        }
+        else if (!std::strcmp(text, "rf backlight-pins"))
+            gpio_dump_io_configuration(stdout, 1ULL << BSP_LCD_BACKLIGHT);
+        else if (std::sscanf(text, "rf brightness %u %c", &value, &extra) == 1) {
+            const bool applied = app_set_brightness(value);
+            printf("RF_BRIGHTNESS percent=%u boot=10 persisted=0 applied=%d\n", app_brightness(), applied);
+        }
         else
             known = false;
         printf("RF_CMD %s command=%s\n", known ? "accepted" : "unknown", text);
@@ -1138,7 +1169,13 @@ extern "C" void app_main() {
     bsp_io_expander_pi4ioe_init(bsp_i2c_get_handle());
     bsp_set_usb_5v_en(false);
     vTaskDelay(pdMS_TO_TICKS(1000));
-    lv_display_t *display = bsp_display_start();
+    bsp_display_cfg_t display_cfg = {
+        .lvgl_port_cfg = ESP_LVGL_PORT_INIT_CONFIG(),
+        .buffer_size = BSP_LCD_DRAW_BUFF_SIZE,
+        .double_buffer = BSP_LCD_DRAW_BUFF_DOUBLE,
+        .flags = {.buff_dma = true, .buff_spiram = false, .sw_rotate = false},
+    };
+    lv_display_t *display = bsp_display_start_with_config(&display_cfg);
     assert(display);
     bsp_display_lock(0);
     void *pool = heap_caps_malloc(256 * 1024, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
@@ -1148,7 +1185,8 @@ extern "C" void app_main() {
     }
     app_build_ui(display);
     bsp_display_unlock();
-    ESP_ERROR_CHECK(bsp_display_brightness_set(10));
+    assert(app_set_brightness(10));
+    ESP_LOGI(TAG, "DISPLAY_CONFIG native portrait 720x1280 sw_rotate=0 brightness_boot=10 persisted=0");
     vTaskDelay(pdMS_TO_TICKS(250));
     bsp_set_usb_5v_en(true);
     xTaskCreatePinnedToCore(receiver_task, "rf_receiver", 10240, nullptr, 8, nullptr, 0);

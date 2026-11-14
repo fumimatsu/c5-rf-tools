@@ -6,17 +6,22 @@
 #include "esp_log.h"
 #include "esp_timer.h"
 #include <algorithm>
+#include <cassert>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+extern "C" {
 LV_FONT_DECLARE(rf_jp20);
 LV_FONT_DECLARE(rf_jp24);
+}
 namespace {
 constexpr uint32_t BG = 0x111315, PANEL = 0x191c1f, EDGE = 0x3b4146, WHITE = 0xe2e5e7, DIM = 0x969da3,
                    AMBER = 0xd2a660;
 constexpr uint32_t traces[4] = {0x639bc0, 0x80ab83, 0xc4a25f, 0xb57c76};
-constexpr int PW = 1120, HH = 128, SH = 100, WH = 152;
+constexpr int SW = 720, SCREEN_H = 1280, PW = 608, HH = 224, SH = 168, WH = 300;
 rf::Data *view;
+lv_obj_t *brightness_modal, *brightness_value, *brightness_message;
+bool brightness_open = false;
 lv_obj_t *screen, *status, *health, *notice_label, *hint_label, *monitor, *search, *modal;
 lv_obj_t *monitor_nav, *search_nav, *imd_button, *background_nav, *peak_nav, *scale_button, *step_button;
 lv_obj_t *values[4], *units[4], *raw_labels[4], *states[4], *plan_buttons[4];
@@ -90,6 +95,9 @@ lv_obj_t *button(lv_obj_t *p, const char *t, int x, int y, int w, int h, lv_even
     lv_label_set_text(l, t);
     lv_obj_set_style_text_font(l, &rf_jp20, 0);
     lv_obj_set_style_text_color(l, lv_color_hex(WHITE), 0);
+    lv_obj_set_width(l, w - 20);
+    lv_label_set_long_mode(l, LV_LABEL_LONG_WRAP);
+    lv_obj_set_style_text_align(l, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_center(l);
     if (cb)
         lv_obj_add_event_cb(b, cb, LV_EVENT_CLICKED, user);
@@ -316,28 +324,28 @@ void modal_close() {
 void build_modal() {
     modal = lv_obj_create(screen);
     lv_obj_remove_style_all(modal);
-    lv_obj_set_size(modal, 1280, 720);
+    lv_obj_set_size(modal, SW, SCREEN_H);
     lv_obj_set_style_bg_color(modal, lv_color_hex(0x08090a), 0);
     lv_obj_set_style_bg_opa(modal, 230, 0);
     lv_obj_remove_flag(modal, LV_OBJ_FLAG_SCROLLABLE);
-    auto *box = panel(modal, 170, 125, 940, 465);
-    label(box, "背景記録", 30, 24, 860, &rf_jp24);
-    modal_message = label(box, "", 30, 72, 860);
-    lv_obj_set_height(modal_message, 100);
+    auto *box = panel(modal, 20, 300, 680, 650);
+    label(box, "背景記録", 24, 24, 632, &rf_jp24);
+    modal_message = label(box, "", 24, 80, 632);
+    lv_obj_set_height(modal_message, 130);
     lv_label_set_long_mode(modal_message, LV_LABEL_LONG_WRAP);
-    button(box, "全機OFFを確認して記録開始", 30, 192, 880, 58, [](lv_event_t *) {
+    button(box, "全機OFFを確認して記録開始", 24, 230, 632, 72, [](lv_event_t *) {
         app_post(ActionType::Background);
         modal_close();
     });
-    adopt_button = button(box, "設置条件が同じ：保存背景を使う", 30, 264, 880, 58, [](lv_event_t *) {
+    adopt_button = button(box, "設置条件が同じ：保存背景を使う", 24, 318, 632, 72, [](lv_event_t *) {
         app_post(ActionType::AdoptBackground);
         modal_close();
     });
-    button(box, "背景を削除", 30, 350, 300, 55, [](lv_event_t *) {
+    button(box, "背景を削除", 24, 434, 300, 60, [](lv_event_t *) {
         app_post(ActionType::ClearBackground);
         modal_close();
     });
-    button(box, "閉じる", 650, 350, 260, 55, [](lv_event_t *) { modal_close(); });
+    button(box, "閉じる", 360, 434, 296, 60, [](lv_event_t *) { modal_close(); });
     modal_close();
 }
 void open_modal() {
@@ -393,16 +401,16 @@ void open_picker(unsigned slot) {
 void build_picker() {
     picker = lv_obj_create(screen);
     lv_obj_remove_style_all(picker);
-    lv_obj_set_size(picker, 1280, 720);
+    lv_obj_set_size(picker, SW, SCREEN_H);
     lv_obj_set_style_bg_color(picker, lv_color_hex(0x08090a), 0);
     lv_obj_set_style_bg_opa(picker, 240, 0);
     lv_obj_remove_flag(picker, LV_OBJ_FLAG_SCROLLABLE);
-    auto *box = panel(picker, 90, 80, 1100, 560);
-    picker_title = label(box, "チャンネル選択", 30, 22, 1040, &rf_jp24);
-    const char *bands[] = {"R / Raceband", "A / Boscam", "B / Boscam", "E / Boscam", "F / Fatshark"};
+    auto *box = panel(picker, 20, 170, 680, 940);
+    picker_title = label(box, "チャンネル選択", 24, 24, 632, &rf_jp24);
+    const char *bands[] = {"R", "A", "B", "E", "F"};
     for (unsigned band = 0; band < 5; band++) {
         band_buttons[band] = button(
-            box, bands[band], 30 + int(band) * 208, 76, 200, 48,
+            box, bands[band], 24 + int(band) * 128, 80, 120, 54,
             [](lv_event_t *e) {
                 picker_band = unsigned(reinterpret_cast<uintptr_t>(lv_event_get_user_data(e)));
                 refresh_picker();
@@ -411,7 +419,7 @@ void build_picker() {
     }
     for (unsigned channel = 0; channel < 8; channel++) {
         choice_buttons[channel] = button(
-            box, "", 30 + int(channel % 4) * 260, 150 + int(channel / 4) * 82, 250, 68,
+            box, "", 24 + int(channel % 2) * 324, 160 + int(channel / 2) * 84, 308, 70,
             [](lv_event_t *e) {
                 const unsigned channel = unsigned(reinterpret_cast<uintptr_t>(lv_event_get_user_data(e)));
                 const unsigned id = picker_band * 8 + channel;
@@ -421,16 +429,16 @@ void build_picker() {
             },
             reinterpret_cast<void *>(uintptr_t(channel)));
     }
-    label(box, "5645-5917 MHz / E7・E8は測定範囲外 / 選択は本体に保存", 30, 328, 1040, &rf_jp20, DIM);
-    button(box, "セット E2 / E1 / F3 / F5", 30, 380, 510, 56, [](lv_event_t *) {
+    label(box, "5645-5917 MHz / E7・E8は測定範囲外", 24, 508, 632, &rf_jp20, DIM);
+    button(box, "セット E2 / E1 / F3 / F5", 24, 602, 632, 64, [](lv_event_t *) {
         if (!view->background_busy && app_post(ActionType::ChannelSet, 0))
             close_picker();
     });
-    button(box, "セット R2 / R3 / R4 / R5", 550, 380, 510, 56, [](lv_event_t *) {
+    button(box, "セット R2 / R3 / R4 / R5", 24, 680, 632, 64, [](lv_event_t *) {
         if (!view->background_busy && app_post(ActionType::ChannelSet, 1))
             close_picker();
     });
-    button(box, "閉じる", 800, 474, 260, 52, [](lv_event_t *) { close_picker(); });
+    button(box, "閉じる", 360, 820, 296, 60, [](lv_event_t *) { close_picker(); });
     close_picker();
 }
 bool reference_busy() {
@@ -607,16 +615,16 @@ void open_normal(unsigned slot) {
 void build_normal() {
     normal_modal = lv_obj_create(screen);
     lv_obj_remove_style_all(normal_modal);
-    lv_obj_set_size(normal_modal, 1280, 720);
+    lv_obj_set_size(normal_modal, SW, SCREEN_H);
     lv_obj_remove_flag(normal_modal, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_style_bg_color(normal_modal, lv_color_hex(0x08090a), 0);
     lv_obj_set_style_bg_opa(normal_modal, 240, 0);
-    auto *box = panel(normal_modal, 100, 75, 1080, 570);
-    normal_title = label(box, "正常基準", 30, 22, 1020, &rf_jp24);
-    normal_message = label(box, "", 30, 78, 1020);
-    lv_obj_set_height(normal_message, 150);
+    auto *box = panel(normal_modal, 20, 240, 680, 800);
+    normal_title = label(box, "正常基準", 24, 24, 632, &rf_jp24);
+    normal_message = label(box, "", 24, 80, 632);
+    lv_obj_set_height(normal_message, 260);
     lv_label_set_long_mode(normal_message, LV_LABEL_LONG_WRAP);
-    normal_primary = button(box, "全機OFFで無送信を記録（3秒）", 30, 250, 1020, 62, [](lv_event_t *) {
+    normal_primary = button(box, "全機OFFで無送信を記録（3秒）", 24, 370, 632, 80, [](lv_event_t *) {
         const bool on = view->normal_capture.slot == normal_slot &&
                         view->normal_capture.phase == signal_health::Phase::AwaitOn;
         const int64_t now = esp_timer_get_time();
@@ -624,17 +632,65 @@ void build_normal() {
             normal_request_us = now;
     });
     normal_adopt =
-        button(box, "同じ機体・設置・出力：保存正常基準を使う", 30, 332, 1020, 62, [](lv_event_t *) {
+        button(box, "同じ機体・設置・出力：保存正常基準を使う", 24, 474, 632, 80, [](lv_event_t *) {
             if (app_post(ActionType::AdoptNormal, normal_slot))
                 close_normal();
         });
-    label(box, "暫定判定 / 緑は基準内 / 映像品質・無干渉を保証しません", 30, 416, 1020, &rf_jp20, DIM);
-    normal_close = button(box, "閉じる", 720, 486, 330, 52, [](lv_event_t *) {
+    label(box, "暫定判定 / 緑は基準内\n映像品質・無干渉を保証しません", 24, 584, 632, &rf_jp20, DIM);
+    normal_close = button(box, "閉じる", 360, 704, 296, 60, [](lv_event_t *) {
         if (view->normal_capture.busy())
             app_post(ActionType::CancelNormal);
         close_normal();
     });
     close_normal();
+}
+void refresh_brightness() {
+    char s[32];
+    std::snprintf(s, sizeof(s), "%u %%", app_brightness());
+    text(brightness_value, s);
+}
+void set_brightness(unsigned percent) {
+    const bool ok = app_set_brightness(percent);
+    text(brightness_message, ok ? "設定は保存しません / 起動時10%" : "変更できませんでした / 明るさは変更前のまま");
+    refresh_brightness();
+}
+void build_brightness() {
+    brightness_modal = lv_obj_create(screen);
+    lv_obj_remove_style_all(brightness_modal);
+    lv_obj_set_size(brightness_modal, SW, SCREEN_H);
+    lv_obj_remove_flag(brightness_modal, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_style_bg_color(brightness_modal, lv_color_hex(0x08090a), 0);
+    lv_obj_set_style_bg_opa(brightness_modal, 240, 0);
+    auto *box = panel(brightness_modal, 20, 300, 680, 680);
+    label(box, "画面の明るさ", 24, 24, 632, &rf_jp24);
+    brightness_value = label(box, "10 %", 24, 84, 632, &lv_font_montserrat_40);
+    auto *info = label(box, "5〜100%。高輝度は給電によって再起動する場合があります。\n設定は保存しません。再起動時は10%に戻ります。", 24, 150, 632);
+    lv_label_set_long_mode(info, LV_LABEL_LONG_WRAP);
+    lv_obj_set_height(info, 74);
+    auto *preview = panel(box, 24, 238, 632, 42);
+    lv_obj_set_style_bg_color(preview, lv_color_hex(WHITE), 0);
+    label(preview, "明るさ確認", 16, 7, 600, &rf_jp20, BG);
+    button(box, "-5%", 24, 300, 150, 64, [](lv_event_t *) {
+        set_brightness(std::max(5, int(app_brightness()) - 5));
+    });
+    button(box, "+5%", 182, 300, 150, 64, [](lv_event_t *) {
+        set_brightness(std::min(100u, app_brightness() + 5));
+    });
+    button(box, "起動値 10%", 398, 300, 258, 64, [](lv_event_t *) { set_brightness(10); });
+    const unsigned presets[] = {5, 10, 25, 50, 75, 100};
+    for (unsigned i = 0; i < 6; i++) {
+        char name[16];
+        std::snprintf(name, sizeof(name), "%u %%", presets[i]);
+        button(box, name, 24 + 216 * (i % 3), 386 + 74 * (i / 3), 200, 60,
+               [](lv_event_t *e) { set_brightness(unsigned(reinterpret_cast<uintptr_t>(lv_event_get_user_data(e)))); },
+               reinterpret_cast<void *>(uintptr_t(presets[i])));
+    }
+    brightness_message = label(box, "設定は保存しません / 起動時10%", 24, 538, 632);
+    button(box, "閉じる", 360, 578, 296, 60, [](lv_event_t *) {
+        lv_obj_add_flag(brightness_modal, LV_OBJ_FLAG_HIDDEN);
+        brightness_open = false;
+    });
+    lv_obj_add_flag(brightness_modal, LV_OBJ_FLAG_HIDDEN);
 }
 void bind_canvas(lv_obj_t *parent, lv_obj_t *&canvas, lv_draw_buf_t &descriptor, uint16_t *&pixels, int x,
                  int y, int height) {
@@ -808,14 +864,16 @@ void update(lv_timer_t *) {
                                 lv_color_hex(view->error[0] || any_alert || any_bad ? AMBER : WHITE), 0);
     text(hint_label, view->background_active ? "相対値・映像品質は未判定 / 近接チャンネルの像に注意"
                                              : "未校正の受信値 dB / 背景は全機OFFで記録してください");
-    std::snprintf(s, sizeof(s), "USB %s  R %lu/s  CRC %lu  SEQ %lu  C5+ %lu  DUP %lu  CLIP %lu  G! %lu  BG %s",
-                  view->usb ? "ON" : "OFF", (unsigned long)records_per_second, (unsigned long)view->crc,
+    std::snprintf(s, sizeof(s), "R %lu/s  CRC %lu  SEQ %lu  C5+ %lu  DUP %lu\nUSB %s  CLIP %lu  G! %lu  BG %s",
+                  (unsigned long)records_per_second, (unsigned long)view->crc,
                   (unsigned long)view->gaps, (unsigned long)view->drop_increase, (unsigned long)view->duplicates,
-                  (unsigned long)view->clip_samples, (unsigned long)view->gain_samples,
+                  view->usb ? "ON" : "OFF", (unsigned long)view->clip_samples, (unsigned long)view->gain_samples,
                   view->background_active   ? (view->background_saved ? "SAVED" : "RAM")
                   : view->background_stored ? "STORED"
                                             : "NONE");
     text(health, s);
+    if (brightness_open)
+        refresh_brightness();
     if (reference_busy()) {
         lv_obj_add_state(background_nav, LV_STATE_DISABLED);
         lv_obj_add_state(monitor_nav, LV_STATE_DISABLED);
@@ -850,7 +908,7 @@ void update(lv_timer_t *) {
         lv_obj_add_state(scale_button, LV_STATE_DISABLED);
     if (show_search) {
         selected = rf::nearest_sweep_index(selected, view->sweep_stride);
-        std::snprintf(s, sizeof(s), "5645 - 5917 MHz / %s dB / %u MHzステップ・約10 MHz受信窓",
+        std::snprintf(s, sizeof(s), "5645-5917 MHz / %s dB / %u MHz刻み",
                       view->background_active && show_delta ? "基準比" : "受信値", 2 * view->sweep_stride);
         text(search_title, s);
         button_text(step_button, view->background_busy      ? "背景記録中 2MHz"
@@ -873,11 +931,11 @@ void update(lv_timer_t *) {
                 std::snprintf(peak_text, sizeof(peak_text), "%+.2f", p / 100.f);
             const float agep = (now - view->sweep_time[selected]) / 1e6f;
             if (view->background_active)
-                std::snprintf(s, sizeof(s), "%u MHz  RAW %+.2f dB  基準比 %+.2f dB  PK %s  %.1f秒前",
-                              rf::sweep_frequency(selected), v / 100.f,
-                              (v - view->background.sweep[selected]) / 100.f, peak_text, agep);
+                std::snprintf(s, sizeof(s), "%u MHz  RAW %+.2f dB  %.1f秒前\n基準比 %+.2f dB  PK %s",
+                              rf::sweep_frequency(selected), v / 100.f, agep,
+                              (v - view->background.sweep[selected]) / 100.f, peak_text);
             else
-                std::snprintf(s, sizeof(s), "%u MHz  RAW %+.2f dB  PK %s  %.1f秒前 / 背景未取得",
+                std::snprintf(s, sizeof(s), "%u MHz  RAW %+.2f dB  PK %s\n%.1f秒前 / 背景未取得",
                               rf::sweep_frequency(selected), v / 100.f, peak_text, agep);
         } else
             std::snprintf(s, sizeof(s), "%u MHz / 未取得・測定無効", rf::sweep_frequency(selected));
@@ -911,45 +969,53 @@ void update(lv_timer_t *) {
 void app_build_ui(lv_display_t *display) {
     view = new rf::Data;
     assert(view);
-    bsp_display_rotate(display, LV_DISPLAY_ROTATION_90);
+    bsp_display_rotate(display, LV_DISPLAY_ROTATION_0);
+    assert(lv_display_get_horizontal_resolution(display) == SW);
+    assert(lv_display_get_vertical_resolution(display) == SCREEN_H);
     screen = lv_screen_active();
     lv_obj_remove_flag(screen, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_style_bg_color(screen, lv_color_hex(BG), 0);
     lv_obj_set_style_bg_opa(screen, LV_OPA_COVER, 0);
     char title[80];
     std::snprintf(title, sizeof(title), "RF FIELD MONITOR / %s", esp_app_get_description()->version);
-    label(screen, title, 24, 16, 790, &lv_font_montserrat_28);
-    status = label(screen, "C5 接続待ち", 870, 21, 385, &rf_jp20);
+    label(screen, title, 20, 16, 680, &lv_font_montserrat_28);
+    status = label(screen, "C5 接続待ち", 20, 56, 680, &rf_jp20);
     monitor_nav =
-        button(screen, "4ch履歴", 208, 66, 180, 46, [](lv_event_t *) { app_post(ActionType::Monitor); });
+        button(screen, "4ch履歴", 192, 94, 160, 48, [](lv_event_t *) { app_post(ActionType::Monitor); });
     search_nav =
-        button(screen, "帯域 / WF", 24, 66, 172, 46, [](lv_event_t *) { app_post(ActionType::Search); });
-    background_nav = button(screen, "背景記録", 400, 66, 182, 46, [](lv_event_t *) { open_modal(); });
-    peak_nav = button(screen, "ピーク消去", 594, 66, 182, 46, [](lv_event_t *) {
+        button(screen, "帯域 / WF", 20, 94, 160, 48, [](lv_event_t *) { app_post(ActionType::Search); });
+    background_nav = button(screen, "背景記録", 364, 94, 160, 48, [](lv_event_t *) { open_modal(); });
+    peak_nav = button(screen, "ピーク消去", 20, 154, 210, 48, [](lv_event_t *) {
         app_post(view->normal_capture.busy() ? ActionType::CancelNormal
                  : view->background_busy     ? ActionType::Monitor
                                              : ActionType::ResetPeaks);
     });
-    imd_button = button(screen, "IMD候補：OFF", 788, 66, 226, 46, [](lv_event_t *) {
+    imd_button = button(screen, "IMD候補：OFF", 242, 154, 220, 48, [](lv_event_t *) {
         show_imd = !show_imd;
         button_text(imd_button, show_imd ? "IMD候補：ON" : "IMD候補：OFF");
     });
     lv_obj_add_flag(imd_button, LV_OBJ_FLAG_HIDDEN);
-    scale_button = button(screen, "表示:受信値", 1026, 66, 230, 46, [](lv_event_t *) {
+    scale_button = button(screen, "表示:受信値", 474, 154, 226, 48, [](lv_event_t *) {
         if (view->background_active)
             show_delta = !show_delta;
     });
     lv_obj_add_flag(scale_button, LV_OBJ_FLAG_HIDDEN);
+    button(screen, "明るさ", 536, 94, 164, 48, [](lv_event_t *) {
+        refresh_brightness();
+        lv_obj_remove_flag(brightness_modal, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_move_foreground(brightness_modal);
+        brightness_open = true;
+    });
     monitor = lv_obj_create(screen);
     lv_obj_remove_style_all(monitor);
-    lv_obj_set_pos(monitor, 0, 122);
-    lv_obj_set_size(monitor, 1280, 475);
+    lv_obj_set_pos(monitor, 0, 218);
+    lv_obj_set_size(monitor, SW, 910);
     lv_obj_remove_flag(monitor, LV_OBJ_FLAG_SCROLLABLE);
     for (unsigned i = 0; i < 4; i++) {
-        auto *card = panel(monitor, 24 + 312 * i, 0, 296, 260);
+        auto *card = panel(monitor, 20 + 350 * (i % 2), 280 * (i / 2), 330, 260);
         card_panels[i] = card;
         channel_buttons[i] = button(
-            card, "チャンネル選択", 14, 6, 268, 40,
+            card, "チャンネル選択", 14, 6, 302, 40,
             [](lv_event_t *e) {
                 open_picker(unsigned(reinterpret_cast<uintptr_t>(lv_event_get_user_data(e))));
             },
@@ -957,18 +1023,18 @@ void app_build_ui(lv_display_t *display) {
         lv_obj_set_style_text_color(lv_obj_get_child(channel_buttons[i], 0), lv_color_hex(traces[i]), 0);
         values[i] = label(card, "--.-", 14, 50, 180, &lv_font_montserrat_40);
         units[i] = label(card, "FILT dB", 184, 76, 100, &rf_jp20, DIM);
-        raw_labels[i] = label(card, "RAW --.-   PK --.-", 14, 102, 268, &lv_font_montserrat_20, DIM);
-        level_labels[i] = label(card, "レベル 灰:基準なし", 14, 132, 268, &rf_jp20, DIM);
-        stability_labels[i] = label(card, "安定性 灰:基準なし", 14, 160, 268, &rf_jp20, DIM);
-        states[i] = label(card, "正常基準を記録してください", 14, 188, 268, &rf_jp20, DIM);
+        raw_labels[i] = label(card, "RAW --.-   PK --.-", 14, 102, 302, &lv_font_montserrat_20, DIM);
+        level_labels[i] = label(card, "レベル 灰:基準なし", 14, 132, 302, &rf_jp20, DIM);
+        stability_labels[i] = label(card, "安定性 灰:基準なし", 14, 160, 302, &rf_jp20, DIM);
+        states[i] = label(card, "正常基準を記録してください", 14, 188, 302, &rf_jp20, DIM);
         normal_buttons[i] = button(
-            card, "正常基準", 14, 218, 140, 34,
+            card, "正常基準", 14, 218, 150, 34,
             [](lv_event_t *e) {
                 open_normal(unsigned(reinterpret_cast<uintptr_t>(lv_event_get_user_data(e))));
             },
             reinterpret_cast<void *>(uintptr_t(i)));
         plan_buttons[i] = button(
-            card, "予定ON", 166, 218, 116, 34,
+            card, "予定ON", 186, 218, 130, 34,
             [](lv_event_t *e) {
                 const unsigned index = unsigned(reinterpret_cast<uintptr_t>(lv_event_get_user_data(e)));
                 const unsigned v = !view->channel[index].planned;
@@ -976,28 +1042,28 @@ void app_build_ui(lv_display_t *display) {
             },
             reinterpret_cast<void *>(uintptr_t(i)));
     }
-    history_title = label(monitor, "60秒履歴 / 受信値 dB", 24, 274, 790, &rf_jp20, DIM);
-    history_legend = label(monitor, "", 820, 274, 430, &lv_font_montserrat_20, DIM);
-    bind_canvas(monitor, history_canvas, history_buf, history_pixels, 104, 312, HH);
+    history_title = label(monitor, "60秒履歴 / 受信値 dB", 20, 562, 680, &rf_jp20, DIM);
+    history_legend = label(monitor, "", 84, 592, 608, &lv_font_montserrat_20, DIM);
+    bind_canvas(monitor, history_canvas, history_buf, history_pixels, 84, 628, HH);
     for (unsigned i = 0; i < 4; i++)
-        axis[i] = label(monitor, "", 30, 304 + int(i) * HH / 3, 70, &lv_font_montserrat_20, DIM);
-    label(monitor, "-60 s", 104, 442, 150, &lv_font_montserrat_20, DIM);
-    label(monitor, "-30", 640, 442, 100, &lv_font_montserrat_20, DIM);
-    label(monitor, "NOW", 1160, 442, 90, &lv_font_montserrat_20, DIM);
+        axis[i] = label(monitor, "", 20, 620 + int(i) * HH / 3, 60, &lv_font_montserrat_20, DIM);
+    label(monitor, "-60 s", 84, 858, 150, &lv_font_montserrat_20, DIM);
+    label(monitor, "-30", 360, 858, 100, &lv_font_montserrat_20, DIM);
+    label(monitor, "NOW", 620, 858, 80, &lv_font_montserrat_20, DIM);
     search = lv_obj_create(screen);
     lv_obj_remove_style_all(search);
-    lv_obj_set_pos(search, 0, 122);
-    lv_obj_set_size(search, 1280, 475);
+    lv_obj_set_pos(search, 0, 218);
+    lv_obj_set_size(search, SW, 910);
     lv_obj_remove_flag(search, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_add_flag(search, LV_OBJ_FLAG_HIDDEN);
-    search_title = label(search, "5645 - 5917 MHz / 4 MHzステップ・約10 MHz受信窓", 24, 4, 950, &rf_jp20);
-    step_button = button(search, "高速 4MHz / 詳細へ", 988, 0, 268, 44, [](lv_event_t *) {
+    search_title = label(search, "5645-5917 MHz / 約10 MHz受信窓", 20, 0, 680, &rf_jp20);
+    step_button = button(search, "高速 4MHz / 詳細へ", 20, 40, 680, 48, [](lv_event_t *) {
         if (!view->background_busy)
             app_post(ActionType::SearchStep, view->search_stride == 2 ? 2 : 4);
     });
     for (unsigned i = 0; i < rf::N; i++) {
         search_channel_buttons[i] = button(
-            search, "チャンネル選択", 24 + int(i) * 312, 42, 296, 38,
+            search, "チャンネル選択", 20 + int(i % 2) * 350, 100 + int(i / 2) * 54, 330, 42,
             [](lv_event_t *e) {
                 open_picker(unsigned(reinterpret_cast<uintptr_t>(lv_event_get_user_data(e))));
             },
@@ -1005,7 +1071,7 @@ void app_build_ui(lv_display_t *display) {
         lv_obj_set_style_text_color(lv_obj_get_child(search_channel_buttons[i], 0), lv_color_hex(traces[i]),
                                     0);
     }
-    bind_canvas(search, spectrum_canvas, spectrum_buf, spectrum_pixels, 104, 88, SH);
+    bind_canvas(search, spectrum_canvas, spectrum_buf, spectrum_pixels, 84, 220, SH);
     lv_obj_add_flag(spectrum_canvas, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_add_event_cb(
         spectrum_canvas,
@@ -1025,28 +1091,39 @@ void app_build_ui(lv_display_t *display) {
     for (unsigned i = 0; i < 4; i++) {
         char value[20];
         std::snprintf(value, sizeof(value), "%+d", 50 - int(i) * 20);
-        label(search, value, 30, 80 + int(i) * SH / 3, 70, &lv_font_montserrat_20, DIM);
+        label(search, value, 20, 212 + int(i) * SH / 3, 60, &lv_font_montserrat_20, DIM);
     }
-    label(search, "5645", 104, 194, 120, &lv_font_montserrat_20, DIM);
-    label(search, "5780", 650, 194, 100, &lv_font_montserrat_20, DIM);
-    label(search, "5917 MHz", 1100, 194, 150, &lv_font_montserrat_20, DIM);
-    cursor_label = label(search, "未取得", 24, 226, 1230, &rf_jp20);
-    label(search, "ウォーターフォール / 1行=1掃引 / 色線:ch・濃淡:受信", 24, 256, 1180, &rf_jp20, DIM);
-    bind_canvas(search, water_canvas, water_buf, water_pixels, 104, 292, WH);
-    water_time = label(search, "掃引完了後に履歴を表示", 24, 450, 650, &rf_jp20, DIM);
-    sweep_status = label(search, "", 650, 450, 600, &rf_jp20, DIM);
-    notice_label = label(screen, "C5の接続を待っています", 24, 608, 1230, &rf_jp20);
-    hint_label = label(screen, "未校正の受信値 dB", 24, 644, 1230, &rf_jp20, DIM);
-    health = label(screen, "USB OFF", 24, 683, 1230, &lv_font_montserrat_20, DIM);
+    label(search, "5645", 84, 394, 120, &lv_font_montserrat_20, DIM);
+    label(search, "5780", 350, 394, 100, &lv_font_montserrat_20, DIM);
+    label(search, "5917 MHz", 580, 394, 112, &lv_font_montserrat_20, DIM);
+    cursor_label = label(search, "未取得", 20, 430, 680, &rf_jp20);
+    label(search, "WF / 1行=1掃引 / 色線:ch・濃淡:受信", 20, 494, 680, &rf_jp20, DIM);
+    bind_canvas(search, water_canvas, water_buf, water_pixels, 84, 530, WH);
+    water_time = label(search, "掃引完了後に履歴を表示", 20, 846, 680, &rf_jp20, DIM);
+    sweep_status = label(search, "", 20, 878, 680, &rf_jp20, DIM);
+    notice_label = label(screen, "C5の接続を待っています", 20, 1130, 680, &rf_jp20);
+    hint_label = label(screen, "未校正の受信値 dB", 20, 1180, 680, &rf_jp20, DIM);
+    health = label(screen, "USB OFF", 20, 1230, 680, &lv_font_montserrat_20, DIM);
+    lv_label_set_long_mode(cursor_label, LV_LABEL_LONG_WRAP);
+    lv_obj_set_height(cursor_label, 56);
+    lv_label_set_long_mode(notice_label, LV_LABEL_LONG_WRAP);
+    lv_obj_set_height(notice_label, 48);
+    lv_label_set_long_mode(hint_label, LV_LABEL_LONG_WRAP);
+    lv_obj_set_height(hint_label, 48);
+    lv_obj_set_height(health, 48);
     build_modal();
     build_picker();
     build_normal();
+    build_brightness();
     lv_timer_create(update, 100, nullptr);
     ESP_LOGI("RF4_UI",
-             "UI ready: industrial square layout, Japanese subset, 1280x720; plot buffers in PSRAM");
+             "UI ready: industrial square layout, Japanese subset, 720x1280 native portrait; plot buffers in PSRAM");
 }
 void app_ui_diagnostics() {
     bsp_display_lock(0);
+    ESP_LOGI("RF4_UI", "screen=%ldx%ld rotation=%d brightness=%u brightness_open=%d canvas_bytes=%u",
+             (long)lv_display_get_horizontal_resolution(nullptr), (long)lv_display_get_vertical_resolution(nullptr),
+             int(lv_display_get_rotation(nullptr)), app_brightness(), brightness_open, PW * (HH + SH + WH) * 2);
     lv_mem_monitor_t m{};
     lv_mem_monitor(&m);
     ESP_LOGI(

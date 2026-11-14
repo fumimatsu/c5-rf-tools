@@ -1,6 +1,6 @@
 # Tab5 C5 RF Monitor
 
-Purpose: Tab5 USB Hostで既存C5MKを読み、選択した4chの受信、正常基準とレベル/安定性の評価、背景保存、履歴と広域/WFを表示する。動作確認済み旧版は移管元PCに保持し、リポジトリには含めない。現行0.5.1の仕様と実機証跡はREADME.md、docs/rf4-0.5.1-verification.mdと../../docs/handoff.md。
+Purpose: Tab5 USB Hostで既存C5MKを読み、選択した4chの受信、正常基準とレベル/安定性の評価、背景保存、履歴と広域/WFを表示する。動作確認済み旧版は移管元PCに保持し、リポジトリには含めない。現行0.6.0の仕様と実機証跡はREADME.md、docs/rf4-0.6.0-verification.mdと../../docs/handoff.md。
 
 - main/: アプリ、測定集計、USBデコーダー、UI。components/: 固定したM5Stack BSP。由来と変更点はREADME.md。
 - 受信と描画を分離する。通信不連続は後続フレームの集計前に該当枠・正常基準記録・評価窓へ伝達し、保存済み基準を消さない。CRC不正、RF失敗、クリップ、ゲイン逸脱、欠測、切断を正常値へ置換しない。receiver dBをdBm/送信出力/混信率/映像品質と表記しない。
