@@ -99,12 +99,32 @@ function drawNative(i,traces,start,end,cfg) {
   if(typeof drawHumanMarkers==='function')drawHumanMarkers(ctx,i,x,h,start,end);
   ctx.restore();
 }
-function heat(v,delta){if(v===null||!Number.isFinite(v))return'#0b0d0f';const t=Math.max(0,Math.min(1,(v-(delta?0:-10))/(delta?35:55))),stops=[[17,23,32],[25,75,105],[50,138,160],[203,189,105],[243,213,176]],z=t*4,i=Math.min(3,Math.floor(z)),f=z-i;return`rgb(${stops[i].map((a,k)=>Math.round(a*(1-f)+stops[i+1][k]*f)).join(',')})`;}
+function heat(v,delta){
+  if(v===null||!Number.isFinite(v))return'#24292d';
+  const t=Math.max(0,Math.min(1,(v-(delta?0:-10))/(delta?30:55))),
+    stops=[[0,0,255],[0,255,255],[0,255,0],[255,255,0],[255,0,0]],z=t*4,i=Math.min(3,Math.floor(z)),f=z-i;
+  return`rgb(${stops[i].map((a,k)=>Math.round(a*(1-f)+stops[i+1][k]*f)).join(',')})`;
+}
+let missingHeatPattern;
+function missingHeat(ctx){
+  if(!missingHeatPattern){
+    const tile=document.createElement('canvas');tile.width=tile.height=8;const c=tile.getContext('2d');
+    c.fillStyle='#24292d';c.fillRect(0,0,8,8);c.strokeStyle='#737d85';c.lineWidth=2;
+    c.beginPath();c.moveTo(-4,8);c.lineTo(4,0);c.moveTo(4,8);c.lineTo(12,0);c.stroke();
+    missingHeatPattern=ctx.createPattern(tile,'repeat');
+  }
+  return missingHeatPattern;
+}
+
 function drawSpectrum(s) {
   const sw=s.sweep;if(!sw){surface('#spectrumPlot');surface('#waterfall');$('#sweepTime').textContent='走査待ち';return;}
   $('#sweepTime').textContent=`1走査 ${sw.duration.toFixed(2)}s / ${sw.values.length}点`;
+  const delta=!!sw.background;
+  $('#heatMeaning').textContent=`新しい測定 ↓ / 色:${delta?'背景差':'受信値'} dB`;
+  $('#heatLow').textContent=delta?'≤ 0':'≤ −10';
+  $('#heatHigh').textContent=delta?'≥ +30 dB':'≥ +45 dB';
   {const {ctx,w,h}=surface('#spectrumPlot');axes(ctx,w,h,-10,45,5645,5917);ctx.clearRect(0,h-18,w,18);ctx.fillStyle='#94a4ac';for(let f=5660;f<=5900;f+=40)ctx.fillText(String(f),34+(w-42)*(f-5645)/272-12,h-3);ctx.fillText('MHz',w-30,h-3);if(sw.background)simpleLine(ctx,sw.background,w,h,'#6e7a81',-10,45);simpleLine(ctx,sw.values,w,h,'#d4dce0',-10,45);sw.values.forEach((v,i)=>{if(v===null)return;ctx.fillStyle='#d4dce0';ctx.fillRect(33+(w-42)*i/(sw.values.length-1),11+(45-v)/55*(h-35),2,2);});s.config.channels.forEach((ch,i)=>{const x=34+(w-42)*(s.presets[ch]-5645)/272;ctx.strokeStyle=colors[i];ctx.beginPath();ctx.moveTo(x,6);ctx.lineTo(x,h-24);ctx.stroke();ctx.fillStyle=colors[i];ctx.fillText(ch,Math.min(x+3,w-22),12+(i%2)*12);});}
-  {const {ctx,w,h}=surface('#waterfall');const rows=water.slice(-120).reverse(),dy=h/120;rows.forEach((r,row)=>{r.values.forEach((v,i)=>{ctx.fillStyle=heat(v===null?null:v-(r.background?r.background[i]:0),!!r.background);ctx.fillRect(36+i*(w-36)/r.values.length,row*dy,(w-36)/r.values.length+.7,dy+.7)});if(row%20===0){ctx.fillStyle='#9aa9b1';ctx.font='10px ui-monospace,monospace';ctx.fillText('-'+Math.round(rows[0].time-r.time)+'s',0,row*dy+11);}});}
+  {const {ctx,w,h}=surface('#waterfall');const rows=water.slice(-120).reverse(),dy=h/120;rows.forEach((r,row)=>{r.values.forEach((v,i)=>{const base=r.background?r.background[i]:0,valid=Number.isFinite(v)&&Number.isFinite(base);ctx.fillStyle=valid?heat(v-base,!!r.background):missingHeat(ctx);ctx.fillRect(36+i*(w-36)/r.values.length,row*dy,(w-36)/r.values.length+.7,dy+.7)});if(row%20===0){ctx.fillStyle='#9aa9b1';ctx.font='10px ui-monospace,monospace';ctx.fillText('-'+Math.round(rows[0].time-r.time)+'s',0,row*dy+11);}});}
 }
 function table(events) {
   $('#eventRows').replaceChildren(...(events.length?events.slice(0,40).map(e=>{const tr=document.createElement('tr');for(const text of [e.channel,e.peakSessionSeconds===undefined?'—':e.peakSessionSeconds.toFixed(3)+'s',e.intervalMs===null?'基点':e.intervalMs===undefined?'—':(e.intervalMs/1000).toFixed(3)+'s',e.peakRssi??'—',e.reason==='first_pass'?'基点通過':e.reason==='pass'?'通過':e.reason,e.rttMs===undefined?'—':e.rttMs.toFixed(1)+'ms',e.receivedUtc||'—']){const td=document.createElement('td');td.textContent=text;tr.append(td);}return tr;}):[(()=>{const tr=document.createElement('tr'),td=document.createElement('td');td.colSpan=7;td.className='empty';td.textContent='通過イベントはまだありません。';tr.append(td);return tr;})()]));

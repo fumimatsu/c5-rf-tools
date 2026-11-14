@@ -22,6 +22,8 @@ Linuxでは `.venv/bin/python` に読み替えます。`http://127.0.0.1:8765/` 
 
 ## Pyramid: 実機への更新
 
+現行ソース0.2.3のJet WFは未配備で、実機は0.2.2。systemdテンプレートは0.2.3を指します。[検証・次回配備条件](jet-waterfalls.md)を確認してください。
+
 1. SSH先と認証を手元で確認します。認証情報・host keyはリポジトリに保存しません。
 2. `systemctl cat c5-monitor.service` と `/api/state` で実行パス、版、C5シリアル、記録状態を確認。
 3. 新しいソースを `/opt/c5-monitor/<新しい版>` など実行中の版と別の場所（現行は `/opt/c5-monitor/0.2.2`）へ配置。

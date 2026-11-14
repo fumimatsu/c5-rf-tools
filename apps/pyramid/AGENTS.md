@@ -17,6 +17,8 @@ The ten-state comparison mode is planned, not implemented. The subsequent user i
 
 ## Boundaries
 
+- Current source is 0.2.3 (Jet waterfall); the disconnected Pyramid remains deployed on 0.2.2. Read `../../docs/jet-waterfalls.md` before the next deployment. Do not treat source version or the service template as evidence of the running version.
+
 - C5MK 1.2.5+xiaoc5 on the explicitly configured USB serial. Host/serial/auth settings are local.
   The separate Tab5 and its C5 are outside this application's device ownership.
 - Version 0.2.2 preserves native archives and adds scanner payloads, a separate append-only human-label ledger and training-source export. AI classification,
