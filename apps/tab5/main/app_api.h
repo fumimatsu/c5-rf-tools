@@ -26,4 +26,6 @@ bool app_post(ActionType type, unsigned value = 0);
 void app_copy_data(rf::Data *out);
 void app_build_ui(lv_display_t *display);
 void app_ui_diagnostics();
+unsigned app_brightness();
+bool app_set_brightness(unsigned percent);
 void rf_self_test();
