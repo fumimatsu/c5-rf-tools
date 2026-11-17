@@ -6,8 +6,8 @@
 
 ## 開始時
 
-1. root/対象アプリのAGENTS.md、docs/development.md、[4波比較測定の仕様](four-wave-comparison.md)を読む。
-2. Gitのbranch/HEAD/差分を確認。Pyramidの実行版とcheckoutの版を別々に確認。
+1. `fumimatsu/c5-rf-tools` を取得し、`origin/main` を基準にする。既存の作業コピーではブランチ・HEAD・差分を確認してから更新する。
+2. root/対象アプリのAGENTS.md、[開発手順](development.md)、[0.2.3の配備・実機検証](jet-waterfalls.md)を読む。`/api/state` で稼働版・記録状態を確認し、checkoutの版と照合する。
 3. 接続先はユーザーのローカル設定。C5は各アプリ専用の別個体で、Tab5側・Pyramid側を入れ替えない。
 4. まずPCテスト/ビルド。SSH認証・書き込み先が不明なら推測して書かない。
 
@@ -16,6 +16,7 @@
 - Pyramid配備済み0.2.3: 0.2.2の4ch/WF、背景、記録・再生、独立ラベルにJet WFと凡例・欠測斜線を追加。LANアドレス変更後の403を修正し、実ブラウザでC5受信とWFを確認。[検証と復旧](jet-waterfalls.md)。
 - `c5-monitor.service` の実行先は `/opt/c5-monitor/0.2.3`。0.2.2と0.2.0の旧版を保持。
 - 保存先 /var/lib/c5-monitor。背景は再起動後未採用。全機OFFの再記録を勝手に実施しない。
+- 本体LEDと上部ボタンを検討する場合は[4ch LEDメーターと背景取得ボタン案](pyramid-led-meter.md)から再開。実機のEC Proxyと48 LEDは読み取り確認済み。バーの配線順、発光、押下イベント、既存の音声操作との競合は未確認。LEDから先に検証する。
 - Tab5配備済み0.6.1: ネイティブ縦画面・明るさ調整を維持し、Jet WFと数値付き凡例を追加。[色と検証](jet-waterfalls.md)、[0.6.0の仕様・復旧](../apps/tab5/docs/rf4-0.6.0-verification.md)。NVSは更新前と全バイト一致。現在のchはユーザーの保存設定を維持し、旧初期セットへ戻していない。背景・正常基準を再記録/採用していない。毎回10%起動。高輝度とVTX応答の再検証は未実施。Pyramid実機とC5ファームは変更していない。
 - 実際の記録保存/再生とR8 ON/OFFは確認済みだが、独立した物理ゲートの通過精度は未検証。
 
