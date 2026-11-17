@@ -22,11 +22,11 @@ Linuxでは `.venv/bin/python` に読み替えます。`http://127.0.0.1:8765/` 
 
 ## Pyramid: 実機への更新
 
-現行ソース0.2.3のJet WFは未配備で、実機は0.2.2。systemdテンプレートは0.2.3を指します。[検証・次回配備条件](jet-waterfalls.md)を確認してください。
+実機の現在の配置先は `/opt/c5-monitor/0.2.3` です。[検証と復旧手順](jet-waterfalls.md)。
 
 1. SSH先と認証を手元で確認します。認証情報・host keyはリポジトリに保存しません。
 2. `systemctl cat c5-monitor.service` と `/api/state` で実行パス、版、C5シリアル、記録状態を確認。
-3. 新しいソースを `/opt/c5-monitor/<新しい版>` など実行中の版と別の場所（現行は `/opt/c5-monitor/0.2.2`）へ配置。
+3. 新しいソースを `/opt/c5-monitor/<新しい版>` など実行中の版と別の場所へ配置。
 4. 新しい場所でPythonテストを実行。既存のUSB所有サービスを動かしたまま、2つ目の受信プロセスを起動しない。
 5. 既存サービス定義をバックアップ。記録停止を確認し、`/etc/c5-monitor.env` に対象の `C5_SERIAL` を設定して `c5-monitor.service` テンプレートのパスを確認。
 6. サービス定義を更新し、daemon-reload / restart。`/var/lib/c5-monitor` を保持する。

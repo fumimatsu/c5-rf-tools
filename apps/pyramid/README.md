@@ -10,10 +10,10 @@ the unrelated Blackbox Flight Analyzer checkout.
 `python3 server.py --serial <C5_SERIAL> --data .local/data --bind 127.0.0.1 --port 8765`
 
 Portable setup and deployment: ../../docs/development.md. For LAN operation pass --bind 0.0.0.0.
-Version 0.2.2 includes the portable serial/environment settings and is deployed on the existing Pyramid.
+Version 0.2.2 introduced the portable serial/environment settings.
 [Scanner archives, independent labels, AI-source export, evidence and rollback](docs/0.2.2-recording-labels.md).
 
-Version 0.2.3 changes the waterfall to blue/cyan/green/yellow/red with a numeric legend and gray hatching for missing samples. Absolute range: −10..+45 receiver dB; background delta: 0..+30 dB. Red means higher received power, not a fault. This version is source-only: the disconnected Pyramid remains on 0.2.2. The service template targets the future `/opt/c5-monitor/0.2.3` deployment. [Verification and deployment boundaries](../../docs/jet-waterfalls.md).
+Version 0.2.3 runs on the Pyramid from `/opt/c5-monitor/0.2.3`. It adds the blue/cyan/green/yellow/red waterfall and checks the LAN address against the destination of each HTTP connection. [Verification and rollback](../../docs/jet-waterfalls.md).
 
 The systemd unit runs with DynamicUser and dialout, owns only this C5 serial
 device, and stores config, background and trial passes in its StateDirectory.
