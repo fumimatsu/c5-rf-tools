@@ -73,6 +73,40 @@ class PortableTests(unittest.TestCase):
             finally:
                 stop_server(process)
 
+    def test_wildcard_listener_accepts_the_actual_destination_address(self):
+        with socket.socket() as sock:
+            try:
+                sock.bind(('127.0.0.2', 0))
+            except OSError as error:
+                self.skipTest(f'Second loopback address unavailable: {error}')
+            port = sock.getsockname()[1]
+        with tempfile.TemporaryDirectory() as root:
+            env = dict(os.environ, C5_SERIAL='00:00:00:00:00:01')
+            process = subprocess.Popen(
+                [sys.executable, 'server.py', '--data', root, '--bind', '0.0.0.0', '--port', str(port)],
+                env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            base = f'http://127.0.0.2:{port}/api/state'
+            opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+            try:
+                deadline = time.monotonic() + 10
+                while True:
+                    try:
+                        with opener.open(base, timeout=1) as response:
+                            self.assertEqual(response.status, 200)
+                        break
+                    except urllib.error.HTTPError:
+                        raise
+                    except (urllib.error.URLError, ConnectionError):
+                        if time.monotonic() > deadline:
+                            self.fail('wildcard listener failed to start')
+                        time.sleep(.05)
+                wrong_host = urllib.request.Request(base, headers={'Host': f'127.0.0.1:{port}'})
+                with self.assertRaises(urllib.error.HTTPError) as error:
+                    opener.open(wrong_host, timeout=2)
+                self.assertEqual(error.exception.code, 403)
+            finally:
+                stop_server(process)
+
 
 if __name__ == '__main__':
     unittest.main()

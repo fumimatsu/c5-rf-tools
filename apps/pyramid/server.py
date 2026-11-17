@@ -13,6 +13,7 @@ import shutil
 import socket
 import sqlite3
 import statistics
+import subprocess
 import sys
 import threading
 import time
@@ -546,13 +547,7 @@ def serve(monitor, bind, port):
     export_slot=threading.BoundedSemaphore(1)
     token = secrets.token_urlsafe(24)
     html = (Path(__file__).parent / 'index.html').read_text(encoding='utf-8').replace('__CONTROL_TOKEN__', token)
-    allowed_hosts = {'localhost', '127.0.0.1', socket.gethostname()}
-    allowed_hosts.update(socket.gethostbyname_ex(socket.gethostname())[2])
-    # Addresses used by local LAN interfaces; no DNS query from HTTP Host.
-    import subprocess
-    if os.name != 'nt':
-        for address in subprocess.check_output(['hostname', '-I'], text=True).split():
-            allowed_hosts.add(address)
+    local_names = {'localhost', socket.gethostname().lower()}
 
     class Handler(BaseHTTPRequestHandler):
         protocol_version = 'HTTP/1.1'
@@ -572,7 +567,10 @@ def serve(monitor, bind, port):
             self.wfile.write(data)
 
         def host_ok(self):
-            return self.headers.get('Host', '').split(':')[0] in allowed_hosts
+            host = self.headers.get('Host', '').split(':', 1)[0].lower()
+            # A wildcard listener still knows the destination address of each connection.
+            # This follows DHCP changes without trusting DNS for a client-provided name.
+            return host in local_names or host == self.connection.getsockname()[0]
 
         def stream_lines(self,lines):
             buffer=bytearray()
