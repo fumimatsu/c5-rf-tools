@@ -2,22 +2,14 @@
 
 ## Purpose
 
-The project is a local RF measurement and timing assistant, not only an HTML
-dashboard. User priority: automate detection of RF changes and adjustment of
-timing thresholds. Use CPU statistics, replay and labelled measurements first;
-use the NPU when a tested model improves detection or reduces operator work.
-Details and proposed phases: docs/automation-plan.md.
-
-## Current priority (2026-11-14)
-
-Implement C5 four-VTX comparison measurement first, then evaluate AI/NPU using
-the saved evidence. Read `../../docs/four-wave-comparison.md` for the ten states,
-raw scanner power, linear-addition comparison, validity and acceptance contract.
-The ten-state comparison mode is planned, not implemented. The subsequent user instruction authorized the 0.2.2 scanner-recording, independent-label and training-source foundation; it is implemented and deployed. Read docs/0.2.2-recording-labels.md. Preserve native records and keep units and label provenance distinct.
+This application uses one C5 for RF monitoring or experimental timing.
+Use CPU statistics, replay and independent labels as baselines when evaluating
+automation. See `docs/automation-plan.md` and `../../docs/four-wave-comparison.md`
+for proposed features. The recording format is in `docs/0.2.2-recording-labels.md`.
 
 ## Boundaries
 
-- Version 0.2.3 was deployed and verified on the Pyramid with the Jet waterfall and LAN address fix. See `../../docs/jet-waterfalls.md` for evidence and rollback.
+- The optional EC LED meter and top-button background capture run separately from the C5 receiver. See `../../docs/pyramid-led-meter.md` for mapping, confirmation and test coverage.
 
 - C5MK 1.2.5+xiaoc5 on the explicitly configured USB serial. Host/serial/auth settings are local.
   The separate Tab5 and its C5 are outside this application's device ownership.
@@ -42,9 +34,8 @@ The ten-state comparison mode is planned, not implemented. The subsequent user i
 
 ## Verification
 
-Run `python -m unittest -v test_protocol test_recording test_portability test_scanner test_scanner_http` and `node --check ui.js` and `node --check labels-ui.js` after
-UI/protocol changes. Check the actual Pyramid and browser, not only local mocks.
+Run `python -m unittest -v test_protocol test_recording test_portability test_scanner test_scanner_http test_led_meter test_background_button` and `node --check ui.js` and `node --check labels-ui.js` after
+UI/protocol changes. Report hardware and browser checks separately from local tests.
 RF ON/OFF is not gate-pass accuracy. Report unverified physical passes, USB
 reconnection and whole-device restart separately from service restart tests.
-Preserve 0.1.0 evidence and firmware backups; use a new version for the next
-runtime deployment. Keep protocol attribution and CC BY-NC-SA 4.0 notice.
+Use a separate versioned install directory when upgrading an installed service. Keep protocol attribution and CC BY-NC-SA 4.0 notice.

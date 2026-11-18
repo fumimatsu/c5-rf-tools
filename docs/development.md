@@ -1,6 +1,6 @@
 # 開発手順
 
-0.2.2の記録・教示基盤は配備済み。[実装・検証と戻し方](../apps/pyramid/docs/0.2.2-recording-labels.md)を確認し、その上で[4波比較測定](four-wave-comparison.md)へ進む。
+Tab5ファームウェアとPyramidアプリのセットアップ、テスト、更新手順です。動作条件と機能一覧は各アプリのREADMEを参照してください。
 
 ## Pyramid: Windows / LinuxのPCで検証
 
@@ -10,7 +10,7 @@ Python 3.10以上、Node.js（JS構文チェック用）を用意します。
 cd apps/pyramid
 python -m venv .venv
 .venv/Scripts/python -m pip install -r requirements.txt
-.venv/Scripts/python -m unittest -v test_protocol test_recording test_portability test_scanner test_scanner_http
+.venv/Scripts/python -m unittest -v test_protocol test_recording test_portability test_scanner test_scanner_http test_led_meter test_background_button
 node --check ui.js
 node --check labels-ui.js
 .venv/Scripts/python server.py --serial 00:00:00:00:00:01 --data .local/dev-data
@@ -20,15 +20,23 @@ Linuxでは `.venv/bin/python` に読み替えます。`http://127.0.0.1:8765/` 
 実機がPyramidに刺さっているとき、PC上のサーバーがLAN越しにそのUSBを直接取得する機能はありません。
 受信を伴う試験はコードをPyramidに配置して行います。既存のWeb画面を見るだけなら配備は不要です。
 
-## Pyramid: 実機への更新
+## Pyramid: 実機への導入と更新
 
-実機の現在の配置先は `/opt/c5-monitor/0.2.3` です。[検証と復旧手順](jet-waterfalls.md)。
+同梱の `apps/pyramid/c5-monitor.service` はsystemd用のテンプレートです。任意の配置先を使う場合は、ユニットの `WorkingDirectory` と `ExecStart` を合わせます。LED機能を使う場合は[LEDサービスの設定](pyramid-led-meter.md)も確認してください。
 
-1. SSH先と認証を手元で確認します。認証情報・host keyはリポジトリに保存しません。
+新規導入では、アプリとPython依存関係をPyramidに配置し、USBシリアルを
+`python3 -m serial.tools.list_ports -v` で確認します。環境ファイルを設定した後、
+ユニットを `/etc/systemd/system/` に配置し、`systemctl daemon-reload` と
+`systemctl enable --now c5-monitor.service` で起動します。LEDサービスは
+4ch監視がLIVE になってから同様に有効化します。
+
+既存の環境を更新する手順は以下のとおりです。
+
+1. 対象ホストとC5を確認します。C5のUSBシリアルは `/etc/c5-monitor.env` に `C5_SERIAL=<C5_SERIAL>` の形式で設定します。シリアル・接続設定・認証情報は展開先で管理します。
 2. `systemctl cat c5-monitor.service` と `/api/state` で実行パス、版、C5シリアル、記録状態を確認。
 3. 新しいソースを `/opt/c5-monitor/<新しい版>` など実行中の版と別の場所へ配置。
 4. 新しい場所でPythonテストを実行。既存のUSB所有サービスを動かしたまま、2つ目の受信プロセスを起動しない。
-5. 既存サービス定義をバックアップ。記録停止を確認し、`/etc/c5-monitor.env` に対象の `C5_SERIAL` を設定して `c5-monitor.service` テンプレートのパスを確認。
+5. 旧アプリとユニット定義を保存。記録と終了処理の停止を確認してから、環境ファイルと新ユニットのパスを照合。
 6. サービス定義を更新し、daemon-reload / restart。`/var/lib/c5-monitor` を保持する。
 7. 版、LIVE、ch、背景保存、記録/再生を確認。失敗時は旧サービス定義へ戻す。
 
@@ -53,7 +61,6 @@ LinuxはESP-IDFをexportした後、同じディレクトリで `idf.py build`�
 生成済み日本語フォントCを含むので通常ビルドにNode/fontToolsは不要。再生成は `tools/font-build/README.md` とprovenanceを参照。
 USB-C側の書き込み対象はTab5（ESP32-P4）。USB-AのC5と取り違えないでください。
 
-## データ・旧版
+## 実機データ
 
-このリポジトリには旧release一式と実測ログを含めません。元PCの旧ディレクトリと実機の旧ランタイムを残しています。
-明日必要な測定履歴は、まず同じLANのPyramid Web画面で確認してください。
+Pyramidは設定・背景・測定履歴を `/var/lib/c5-monitor` に保存します。Tab5は設定と基準を本体NVSに保存します。機器固有の設定、実測ログ、バックアップは各環境で管理してください。

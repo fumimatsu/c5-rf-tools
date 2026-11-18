@@ -112,7 +112,7 @@ E2とE1を選んだ場合、その20MHz間隔ではC5自身のイメージ応答
 
 ESP-IDF 5.4.2のPowerShellで `./build.ps1`。書き込み対象を確認してから `./build.ps1 -Flash -Port COMx`。
 
-- SDK: ESP-IDF 5.4.2。別PCのセットアップは../../docs/development.md。
+- SDK: ESP-IDF 5.4.2。[セットアップと開発手順](../../docs/development.md)。
 - LVGL 9.2.2、USB Host CDC-ACM 2.0.6、esp_codec_dev 1.6.2。解決版はdependencies.lock。
 - main/main.cpp: USB、状態遷移、NVS、PC操作。rf_core.h: 電力集計・背景検証・履歴・候補計算。ui.cpp: 日本語UIと実測データの描画。
 - フォントは公式Google FontsのNoto Sans JPを500ウェイト、必要文字だけ20/24pxへ変換。OFLはmain/fonts/OFL.txt。生成済みCは通常ビルドでそのまま使用できる。再生成はtools/font-build/build_fonts.py、版と入力SHAは同フォルダーのprovenance.json。
@@ -157,15 +157,11 @@ rf dump history
 
 `rf channel 0 R8`は枠0をR8へ変更（枠番号0–3）。`rf channels`は現在の4枠の名前・MHzを表示。`rf channels analog`はE2/E1/F3/F5、`rf channels race`はR2/R3/R4/R5。`rf plan`は最初が枠番号0–3、後ろが0=予定OFF/1=ON。背景操作のYESは設置条件/全機OFFの確認を意味する。接続待ちで古くなった確認操作は再実行しない。dumpの欠測値は-32768、時刻は本体起動後のホスト時刻でUTCではない。
 
-## 保存版とバックアップ
-
-旧release・個体バックアップは移管元PCに保持。このリポジトリに同梱しない。
-
 ## BSPの由来と変更
 
 M5Stack公式M5Tab5-UserDemo commit fe8aa051beb9385468f7e46b909e764169df3f7aのm5stack_tab5、esp_lcd_st7121、esp_lvgl_portを利用。元SPDXを維持。アーカイブは非同梱、共通NOTICE.mdに参照元を記載。
 
-既存0.2.0までのローカル修正: 未使用st7703依存を実際に使うili9881cへ変更、ES7120音声定数をES7210へ整合、PPA回転バッファをキャッシュライン整列・実RGB565画素数で容量計算、部分LCD転送の戻り値確認。実機パネルはST7123。今回の4ch化でC5のRF処理やSDKは変更していない。
+0.2.0までのBSP変更: 未使用st7703依存を実際に使うili9881cへ変更、ES7120音声定数をES7210へ整合、PPA回転バッファをキャッシュライン整列・実RGB565画素数で容量計算、部分LCD転送の戻り値確認。実機パネルはST7123。今回の4ch化でC5のRF処理やSDKは変更していない。
 
 ## 検証
 
@@ -176,7 +172,7 @@ g++ -std=c++17 -O2 -Wall -UNDEBUG -Imain tools/host_self_test.cpp main/rf_self_t
 /tmp/tab5-host-self-test
 ```
 
-0.5.0の独立した検証書は移管元に存在しないため未同梱。移管前の状況は会話での確認と非公開ログに基づく。[0.4.0実機検証](docs/rf4-0.4.0-verification.md)、[0.3.1実機検証](docs/rf4-0.3.1-verification.md)、[0.3.0実機検証](docs/rf4-0.3.0-verification.md)を参照。起動時試験、実受信、NVS保存、画面の目視、VTX応答は別々に記録する。初期画面案はdocs/analog-four-channel-preview.htmlの模擬データであり、実機検証の証拠として使わない。
+旧版の検証結果は[0.6.0](docs/rf4-0.6.0-verification.md)、[0.5.1](docs/rf4-0.5.1-verification.md)、[0.4.0](docs/rf4-0.4.0-verification.md)、[0.3.1](docs/rf4-0.3.1-verification.md)、[0.3.0](docs/rf4-0.3.0-verification.md)を参照。起動時試験、実受信、NVS保存、画面の目視、VTX応答は別々に記録する。
 
 背景保存V2は4枠の周波数を含める。旧0.3.xのV1背景は元のE2/E1/F3/F5としてRAM内で検証・変換し、既存NVSを勝手に上書きしない。新しく背景記録した時だけV2で保存する。詳細は0.4.0検証書。
 
