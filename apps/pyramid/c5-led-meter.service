@@ -1,0 +1,28 @@
+[Unit]
+Description=C5 four-channel LED meter for Pyramid Pro
+After=c5-monitor.service ec_proxy.service
+ConditionPathExists=/etc/c5-led-meter.env
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/c5-led-meter.env
+ExecStart=/usr/bin/python3 /opt/c5-monitor/0.2.5/led_meter.py
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=yes
+# The vendor's root-owned EC socket is in the shared /tmp directory.
+PrivateTmp=no
+ProtectSystem=strict
+ProtectHome=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+CapabilityBoundingSet=
+RestrictAddressFamilies=AF_UNIX AF_INET
+IPAddressDeny=any
+IPAddressAllow=localhost
+RestrictSUIDSGID=yes
+
+[Install]
+WantedBy=multi-user.target

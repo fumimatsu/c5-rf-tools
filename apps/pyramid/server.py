@@ -7,6 +7,7 @@ import math
 import os
 from pathlib import Path
 import queue
+import re
 import secrets
 import signal
 import shutil
@@ -27,7 +28,7 @@ from protocol import Frames, RH, PassTracker, reading
 from recording import Recordings
 from labels import Labels
 
-VERSION = '0.2.3'
+VERSION = '0.2.5'
 SERIAL = os.environ.get('C5_SERIAL', '')
 BANDS = {
     'R': [5658, 5695, 5732, 5769, 5806, 5843, 5880, 5917],
@@ -40,7 +41,6 @@ PRESETS = {f'{band}{i+1}': mhz for band, fs in BANDS.items() for i, mhz in enume
 
 
 def re_serial(value):
-    import re
     return bool(isinstance(value, str) and re.fullmatch(r'(?:[0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}', value))
 
 
@@ -80,7 +80,7 @@ class Monitor:
         self.state = dict(version=VERSION, connection='disconnected', message='C5の接続を待っています',
                           serial=self.serial, device=None, firmware=None, records=0, crcErrors=0,
                           seqGaps=0, chipDrops=0, rfErrors=0, malformedFrames=0, reconnects=0, sweep=None,
-                          sweepProgress=0, backgroundProgress=None, timingArmed=False,
+                          sweepProgress=0, backgroundProgress=None, backgroundCapture=None, timingArmed=False,
                           session=None, events=[], mqtt='未接続：端末内の試験記録のみ',
                           timingPolls=0, timingErrors=0, timingLate=0, timingGaps=0)
         self.levels = [None] * 4
@@ -140,6 +140,13 @@ class Monitor:
                 d['levels'] = [None] * 4
             return d
 
+    def check_background_button(self, ticket):
+        if (self.mode != 'monitor' or self.state['connection'] != 'live'
+                or not self.last_sample or time.monotonic() - self.last_sample >= 1
+                or ticket['epoch'] != self.stream_epoch
+                or self.state['timingArmed'] or (self.recordings.status() or {}).get('closing')):
+            raise ValueError('本体ボタンの背景取得は、記録していないLIVEの4ch監視で行ってください')
+
     def request(self, command):
         if not isinstance(command, dict):
             raise ValueError('操作はJSONオブジェクトで指定してください')
@@ -149,7 +156,11 @@ class Monitor:
         elif action == 'mode' and command.get('mode') in ['monitor', 'spectrum', 'timing']:
             pass
         elif action == 'background' and command.get('allOffConfirmed') is True:
-            pass
+            ticket = command.get('button')
+            if ticket is not None and (
+                    not isinstance(ticket, dict) or type(ticket.get('epoch')) is not int
+                    or not isinstance(ticket.get('id'), str) or not re.fullmatch('[0-9a-f]{16}', ticket['id'])):
+                raise ValueError('本体ボタンの確認情報が不正です')
         elif action in ['adopt_background', 'arm', 'disarm']:
             pass
         else:
@@ -163,7 +174,9 @@ class Monitor:
                 raise ValueError('先に計測記録を停止してください')
             if self.mode == 'background':
                 raise ValueError('背景記録の完了を待ってください')
-        self.commands.put_nowait(command)
+            if action == 'background' and command.get('button') is not None:
+                self.check_background_button(command['button'])
+            self.commands.put_nowait(command)
 
     def command(self, port, text):
         port.write((text + '\n').encode('ascii'))
@@ -274,9 +287,13 @@ class Monitor:
         elif action == 'mode':
             self.mode = cmd['mode']
         elif action == 'background':
+            ticket = cmd.get('button')
+            if ticket is not None:
+                self.check_background_button(ticket)
             self.return_mode = self.mode
             self.mode = 'background'
             self.state['backgroundProgress'] = 0
+            self.state['backgroundCapture'] = dict(id=ticket['id'] if ticket else None, status='running')
         elif action == 'adopt_background':
             if not self.background:
                 raise ValueError('保存された背景がありません')
@@ -298,6 +315,8 @@ class Monitor:
         try:
             return self.apply(port,f,cmd)
         except ValueError as error:
+            if cmd['action'] == 'background' and cmd.get('button') is not None:
+                self.state['backgroundCapture'] = dict(id=cmd['button']['id'], status='failed')
             self.state['message']='操作拒否: '+str(error)
             return True
 
@@ -422,6 +441,10 @@ class Monitor:
             self.background = bg
             self.background_active = True
             self.state['message'] = 'BG SAVED：全機OFF時の背景を保存しました'
+            self.state['backgroundCapture']['status'] = 'saved'
+        except (OSError, ValueError):
+            self.state['backgroundCapture']['status'] = 'failed'
+            raise
         finally:
             self.state['backgroundProgress'] = None
             self.mode = self.return_mode
@@ -436,7 +459,7 @@ class Monitor:
         rh = RH(port)
         self.state['firmware'] = rh.configure([PRESETS[x] for x in self.config['channels']],
                                              self.config['enter'], self.config['exit'])
-        self.state['message'] = 'C5ネイティブ通過検出／試験記録のみ・MADSYSTEM未送信'
+        self.state['message'] = 'C5ネイティブ通過検出／端末内の試験記録'
         self.tracker.reset()
         started = time.monotonic()
         try:
@@ -524,6 +547,9 @@ class Monitor:
                     elif self.mode == 'timing':
                         self.timing_loop(port, f)
             except Exception as error:
+                capture = self.state['backgroundCapture']
+                if capture and capture['status'] == 'running':
+                    capture['status'] = 'failed'
                 if self.mode == 'timing':
                     self.state['timingErrors'] += 1
                 self.close_recording('receiver_error: ' + str(error))

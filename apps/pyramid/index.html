@@ -1,7 +1,7 @@
 <!doctype html><html lang="ja"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="control-token" content="__CONTROL_TOKEN__">
 <title>C5 / RF WORKSPACE</title><link rel="stylesheet" href="/ui.css"></head><body>
-<header><h1>C5 / RF WORKSPACE</h1><span class="muted mono">PYRAMID-PRO · 0.2.3</span><span class="right mono" id="identity">USB —</span><b id="connection">CONNECTING</b></header>
+<header><h1>C5 / RF WORKSPACE</h1><span class="muted mono">PYRAMID-PRO · 0.2.5</span><span class="right mono" id="identity">USB —</span><b id="connection">CONNECTING</b></header>
 <main><nav><button data-mode="monitor">4CH 監視</button><button data-mode="spectrum">帯域 / WF</button><button data-mode="timing">計測・記録</button><button id="reviewOpen">記録を確認</button><b id="modeUnits" class="mono"></b><span id="modeNote" class="muted"></span><span class="right mono" id="recordBadge">REC OFF</span></nav>
 <div id="message" role="status">接続情報を取得しています</div><div id="alert" role="alert" hidden></div><div id="reviewBanner" hidden><strong>保存記録を再生中</strong><span>実機の受信・記録は継続します</span><button id="returnLive">ライブへ戻る</button></div>
 <div class="workspace"><div class="primary">
@@ -21,7 +21,6 @@
 <section class="panel"><div class="sectionHead"><strong>受信 / 記録状態</strong><span id="unitBadge" class="mono muted"></span></div><dl id="diagnostics"></dl><div id="storage" class="note"></div></section>
 <section class="panel"><div class="sectionHead"><strong>保存された計測履歴</strong><button id="refreshRecordings">更新</button></div><select id="recordings" size="5" aria-label="保存された計測履歴"></select><div class="toolbar"><button id="loadRecording">選択記録を再生</button></div><p id="recordingInfo" class="note">計測・記録タブから記録を開始してください。再生は実機設定を変更しません。</p></section>
 <section class="panel"><div class="sectionHead"><strong>背景 / 測定条件</strong><b id="bgState" class="mono">BG NONE</b></div><div class="toolbar"><button id="background">背景記録</button><button id="adopt" hidden>保存背景を採用</button></div><progress id="bgProgress" max="100" value="0" hidden></progress><p id="backgroundInfo" class="note"></p><p class="note">receiver dBと計測用RH値は別の尺度です。dBm・映像品質・混信率を表す値ではありません。</p></section>
-<section class="panel"><div class="sectionHead"><strong>計測連携</strong></div><p id="mqtt" class="note">MADSYSTEM 未接続</p><p class="note">現在は端末内の試験記録。実際のゲート通過精度・自動しきい値・独立した正解ラベルは未検証です。</p></section>
 </aside></div></main>
 <footer>C5MK by Louis Hitchcock · <a href="/notice" target="_blank" rel="noopener">CC BY-NC-SA 4.0 / attribution</a><span class="right">SCANNERは受信ペイロード、NATIVEはRHスナップショット。再生は描画のみで、検出の再計算ではありません。</span></footer>
 <dialog id="bgDialog"><h2>全機OFFで背景を記録</h2><p>ご自身のVTXをすべてOFFにしてください。周辺の他の送信源も含め、現在の背景を記録します。</p><p>2MHz刻みで5回走査し、保存後に元の画面へ戻ります。既存背景は成功時だけ置き換わります。</p><div class="toolbar"><button id="bgStart">全機OFFを確認して記録開始</button><button data-close="bgDialog">キャンセル</button></div></dialog>
