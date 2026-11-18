@@ -9,7 +9,7 @@ Target: a XIAO ESP32-C5 running C5MK 1.2.5+xiaoc5, selected by USB serial.
 
 [Setup and deployment](../../docs/development.md). For LAN operation pass --bind 0.0.0.0.
 Version 0.2.2 introduced the portable serial/environment settings.
-[Scanner archives, independent labels, AI-source export, evidence and rollback](docs/0.2.2-recording-labels.md).
+[Scanner archives, independent labels, data export and verification](docs/0.2.2-recording-labels.md).
 
 The optional EC service displays the four channel slots on the side bars. Version 0.2.5 adds a two-step top-button gesture for background capture and status on the top LEDs. The physical mapping, settings, and rollback are in the [LED meter notes](../../docs/pyramid-led-meter.md). The Jet palette and LAN address fix were verified in [0.2.3](../../docs/jet-waterfalls.md).
 
@@ -46,8 +46,6 @@ No C5 flashing, arbitrary shell commands or arbitrary filesystem APIs exist.
   does not stop the service. Clock mapping across separate gates is unimplemented.
 
 `passes.jsonl` contains local experimental events, including rejection reasons.
-MADSYSTEM integration remains planned. Remote timing would require an
-explicit clock mapping and checkpoint contract.
 
 ## Verification
 
@@ -90,4 +88,4 @@ remains for the previous download path.
 GET /api/recordings lists the latest 40 sessions; /<id>/window returns a bounded
 read-only window (maximum 12000 rows with explicit truncated flag). /<id>/export
 downloads NDJSON including metadata. Archives retain channel/threshold context.
-The paragraph above describes the retained native format. Version 0.2.2 adds independent human labels and a separate scanner format; see the linked 0.2.2 contract. Automatic threshold adoption, AI classification and MADSYSTEM sending remain unimplemented. Physical gate accuracy remains untested.
+The paragraph above describes the retained native format. Version 0.2.2 adds independent human labels and a separate scanner format; see the linked 0.2.2 contract. Physical gate timing accuracy remains untested.

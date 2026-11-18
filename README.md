@@ -28,8 +28,6 @@ ESP32-C5とC5MKを使う、5.8 GHz帯の電波監視・計測用ソフトウェ�
 
 受信値は未校正の相対値（receiver dB）です。RH 1〜254は計測モードの別スケールです。dBm・SNR・混信率・映像品質を報告する機能はありません。物理ゲートの通過精度は未検証です。
 
-4波比較の専用モード、AI/NPU分類、しきい値の自動適用、MADSYSTEM送信は設計段階です。[4波比較の設計](docs/four-wave-comparison.md)と[計測自動化の設計](apps/pyramid/docs/automation-plan.md)を参照してください。
-
 ## ライセンス
 
 アプリの配布条件は [CC BY-NC-SA 4.0](LICENSE) です。C5MK由来のプロトコルと同梱コンポーネント・フォントの個別ライセンスは [NOTICE](NOTICE.md) を参照してください。

@@ -459,7 +459,7 @@ class Monitor:
         rh = RH(port)
         self.state['firmware'] = rh.configure([PRESETS[x] for x in self.config['channels']],
                                              self.config['enter'], self.config['exit'])
-        self.state['message'] = 'C5ネイティブ通過検出／試験記録のみ・MADSYSTEM未送信'
+        self.state['message'] = 'C5ネイティブ通過検出／端末内の試験記録'
         self.tracker.reset()
         started = time.monotonic()
         try:

@@ -6,5 +6,5 @@
 - Keep real serials, IP/auth settings, flash backups and measurements under ignored `.local/` or on the device. Never replace recorded measurements with simulation.
 - Local tests/builds do not flash hardware. Before flashing or deploying, identify the exact device, compare current source/runtime versions and preserve rollback/state. Identify the board and port before writing firmware.
 - Run the relevant Python tests + JS syntax check for Pyramid, or ESP-IDF 5.4.2 build for Tab5. Report actual device verification separately.
-- The Pyramid recording formats and label provenance are documented in `apps/pyramid/docs/0.2.2-recording-labels.md`. Planned work is tracked in `docs/four-wave-comparison.md` and `apps/pyramid/docs/automation-plan.md`. Adaptive thresholds and MADSYSTEM publishing require separate validation.
+- The Pyramid recording formats and label provenance are documented in `apps/pyramid/docs/0.2.2-recording-labels.md`. Adaptive thresholds and external timing integration require separate validation.
 - Preserve LICENSE, notices, upstream attribution and separate third-party licences.
